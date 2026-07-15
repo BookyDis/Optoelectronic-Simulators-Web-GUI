@@ -1,116 +1,120 @@
+// Frontend logic for Quantum Well Simulator
 
-//Frontend logic for simulator
-
-let potentialChart = null;
+let potentialChart    = null;
 let wavefunctionChart = null;
-let boundStateChart = null;
-let energyDiffChart = null;
-let qclChart = null;
-let currentResults = null;
+let boundStateChart   = null;
+let energyDiffChart   = null;
+let qclChart          = null;
+let absorptionChart   = null;
+let currentResults    = null;
 
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('simulatorForm');
-    form.addEventListener('submit', handleSubmit);
-    
-    //Load material info when material is selected
-    document.getElementById('material').addEventListener('change', loadMaterialInfo);
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('simulatorForm')
+        .addEventListener('submit', handleSubmit);
+    document.getElementById('material')
+        .addEventListener('change', loadMaterialInfo);
 });
+
+// ── Main simulation submit ────────────────────────────────────────────────────
 
 async function handleSubmit(e) {
     e.preventDefault();
-    
     clearMessages();
     showLoadingSpinner(true);
-    
+
     const formData = {
-        material: document.getElementById('material').value,
-        solver: document.getElementById('solver').value,
-        subband_model: document.getElementById('subband_model').value,
+        material:        document.getElementById('material').value,
+        solver:          document.getElementById('solver').value,
+        subband_model:   document.getElementById('subband_model').value,
         layer_structure: document.getElementById('layer_structure').value,
-        electric_field: document.getElementById('electric_field').value,
-        grid_spacing: document.getElementById('grid_spacing').value,
-        num_states: document.getElementById('num_states').value
+        electric_field:  document.getElementById('electric_field').value,
+        grid_spacing:    document.getElementById('grid_spacing').value,
+        num_states:      document.getElementById('num_states').value,
     };
-    
+
     try {
         const response = await fetch('/api/simulate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(formData)
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(formData),
         });
-        
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`Server error ${response.status}: ${text.slice(0, 120)}`);
+        }
+
         const data = await response.json();
-        
+
         if (data.status === 'success') {
             currentResults = data.results;
             displayResults(data);
             showSuccessMessage(data.message);
+            document.getElementById('energyLevelsSection')
+                .scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
             showErrorMessage(data.message || 'Simulation failed');
         }
-    } catch (error) {
-        showErrorMessage(`Error: ${error.message}`);
-        console.error('Submission error:', error);
+    } catch (err) {
+        showErrorMessage(`Error: ${err.message}`);
+        console.error('Submission error:', err);
     } finally {
         showLoadingSpinner(false);
     }
 }
 
+// ── Display all results ───────────────────────────────────────────────────────
+
 function displayResults(data) {
-    const results = data.results;
-    
-    //Display energy levels
-    displayEnergyLevels(results.energies);
-    
-    //Display charts
-    displayPotentialChart(results.z_grid, results.potential, results.wavefunctions, results.energies);
-    displayWavefunctionChart(results.z_grid, results.wavefunctions, results.energies);
-    displayBoundStateEnergies(results.energies);
-    displayEnergyDifferences(results.energies);
-    displayTwoQCLPeriods(results.z_grid, results.potential, results.wavefunctions, results.energies);
-    
-    //Show results sections
+    const r = data.results;
+
+    displayEnergyLevels(r.energies);
+    displayPotentialChart(r.z_grid, r.potential, r.wavefunctions, r.energies);
+    displayWavefunctionChart(r.z_grid, r.wavefunctions, r.energies);
+    displayBoundStateEnergies(r.energies);
+    displayEnergyDifferences(r.energies);
+    displayTwoQCLPeriods(r.z_grid, r.potential, r.wavefunctions, r.energies);
+
     document.getElementById('energyLevelsSection').classList.remove('hidden');
     document.getElementById('chartsSection').classList.remove('hidden');
 }
 
+// ── Energy table ──────────────────────────────────────────────────────────────
+
 function displayEnergyLevels(energies) {
     const tbody = document.getElementById('energyTableBody');
     tbody.innerHTML = '';
-    
-    energies.forEach((energy, index) => {
+    energies.forEach((E, i) => {
         const row = document.createElement('tr');
-        const energyMeV = energy * 1000; //Convert eV to meV
         row.innerHTML = `
-            <td>${index}</td>
-            <td>${energy.toFixed(6)}</td>
-            <td>${energyMeV.toFixed(3)}</td>
-        `;
+            <td>${i}</td>
+            <td>${E.toFixed(6)}</td>
+            <td>${(E * 1000).toFixed(3)}</td>`;
         tbody.appendChild(row);
     });
 }
 
+// ── Bandstructure + wavefunctions overlay ─────────────────────────────────────
+
 function displayPotentialChart(zGrid, potential, wavefunctions, energies) {
     const ctx = document.getElementById('potentialChart').getContext('2d');
-    
-    if (potentialChart) {
-        potentialChart.destroy();
-    }
+    if (potentialChart) potentialChart.destroy();
 
-    const wfColors = ['rgb(54, 162, 235)', 'rgb(255, 99, 132)', 'rgb(75, 192, 192)', 'rgb(255, 206, 86)', 'rgb(153, 102, 255)'];
-    const WF_SCALE = 1000; //visual scale factor so |psi|^2 bumps are visible against the V(z) baseline
+    const wfColors = [
+        'rgb(54,162,235)', 'rgb(255,99,132)',
+        'rgb(75,192,192)', 'rgb(255,206,86)', 'rgb(153,102,255)',
+    ];
+    const WF_SCALE = 1000;
 
     const datasets = [{
         label: 'V(z)',
         data: zGrid.map((z, i) => ({ x: z, y: potential[i] * 1000 })),
-        borderColor: 'rgb(100, 149, 237)',
-        backgroundColor: 'rgba(100, 149, 237, 0.1)',
+        borderColor: 'rgb(100,149,237)',
+        backgroundColor: 'rgba(100,149,237,0.1)',
         borderWidth: 3,
         pointRadius: 0,
         tension: 0,
-        fill: true
+        fill: true,
     }];
 
     wavefunctions.forEach((wf, idx) => {
@@ -122,10 +126,10 @@ function displayPotentialChart(zGrid, potential, wavefunctions, energies) {
             borderWidth: 2,
             pointRadius: 0,
             tension: 0.3,
-            fill: false
+            fill: false,
         });
     });
-    
+
     potentialChart = new Chart(ctx, {
         type: 'line',
         data: { datasets },
@@ -133,59 +137,64 @@ function displayPotentialChart(zGrid, potential, wavefunctions, energies) {
             responsive: true,
             plugins: {
                 legend: { display: true },
-                title: { display: true, text: 'Bandstructure Potential Profile' }
+                title:  { display: true, text: 'Bandstructure Potential Profile' },
             },
             scales: {
                 x: { type: 'linear', title: { display: true, text: 'Position z (Å)' } },
-                y: { title: { display: true, text: 'Energy (meV)' } }
-            }
-        }
+                y: { title: { display: true, text: 'Energy (meV)' } },
+            },
+        },
     });
 }
 
+// ── Raw wavefunction amplitudes ───────────────────────────────────────────────
+
 function displayWavefunctionChart(zGrid, wavefunctions, energies) {
     const ctx = document.getElementById('wavefunctionChart').getContext('2d');
-    
-    if (wavefunctionChart) {
-        wavefunctionChart.destroy();
-    }
-    
-    const colors = ['rgb(255, 99, 132)', 'rgb(54, 162, 235)', 'rgb(75, 192, 192)', 'rgb(255, 206, 86)'];
-    
-    const datasets = wavefunctions.map((wf, index) => ({
-        label: `State ${index} (E = ${energies[index].toFixed(6)} eV)`,
+    if (wavefunctionChart) wavefunctionChart.destroy();
+
+    const colors = [
+        'rgb(255,99,132)', 'rgb(54,162,235)',
+        'rgb(75,192,192)',  'rgb(255,206,86)',
+    ];
+
+    const datasets = wavefunctions.map((wf, idx) => ({
+        label: `State ${idx}  (E = ${energies[idx].toFixed(6)} eV)`,
         data: Array.from(wf),
-        borderColor: colors[index % colors.length],
-        backgroundColor: colors[index % colors.length].replace('rgb', 'rgba').replace(')', ', 0.1)'),
+        borderColor: colors[idx % colors.length],
+        backgroundColor: colors[idx % colors.length]
+            .replace('rgb', 'rgba').replace(')', ',0.1)'),
         tension: 0.3,
-        borderWidth: 2
+        borderWidth: 2,
+        pointRadius: 0,
     }));
-    
+
     wavefunctionChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: zGrid.map(z => z.toFixed(2)),
-            datasets: datasets
+            datasets,
         },
         options: {
             responsive: true,
             plugins: {
                 legend: { display: true },
-                title: { display: true, text: 'Quantum Well Wavefunctions' }
+                title:  { display: true, text: 'Quantum Well Wavefunctions' },
             },
             scales: {
                 x: { title: { display: true, text: 'Position z (Å)' } },
-                y: { title: { display: true, text: 'Wavefunction Amplitude' } }
-            }
-        }
+                y: { title: { display: true, text: 'Wavefunction Amplitude' } },
+            },
+        },
     });
 }
+
+// ── Bound state stem plot ─────────────────────────────────────────────────────
 
 function displayBoundStateEnergies(energies) {
     const ctx = document.getElementById('boundStateEnergiesChart').getContext('2d');
     if (boundStateChart) boundStateChart.destroy();
 
-    //Build dashed "stem" lines from 0 up to each energy, with gaps (null) between stems
     const stemPoints = [];
     energies.forEach((E, i) => {
         stemPoints.push({ x: i, y: 0 });
@@ -200,36 +209,38 @@ function displayBoundStateEnergies(energies) {
             datasets: [
                 {
                     data: stemPoints,
-                    borderColor: 'rgb(70, 90, 230)',
+                    borderColor: 'rgb(70,90,230)',
                     borderDash: [6, 4],
                     borderWidth: 1.5,
                     pointRadius: 0,
-                    spanGaps: false
+                    spanGaps: false,
                 },
                 {
                     type: 'scatter',
                     data: markerPoints,
                     pointStyle: 'circle',
                     pointRadius: 8,
-                    pointBorderColor: 'rgb(70, 90, 230)',
+                    pointBorderColor: 'rgb(70,90,230)',
                     pointBackgroundColor: 'rgba(0,0,0,0)',
-                    pointBorderWidth: 2
-                }
-            ]
+                    pointBorderWidth: 2,
+                },
+            ],
         },
         options: {
             responsive: true,
             plugins: {
                 legend: { display: false },
-                title: { display: true, text: 'Bound state energies' }
+                title:  { display: true, text: 'Bound State Energies' },
             },
             scales: {
                 x: { type: 'linear', title: { display: true, text: '#' } },
-                y: { title: { display: true, text: 'E [meV]' }, beginAtZero: true }
-            }
-        }
+                y: { title: { display: true, text: 'E [meV]' }, beginAtZero: true },
+            },
+        },
     });
 }
+
+// ── Energy differences (THz) ──────────────────────────────────────────────────
 
 function displayEnergyDifferences(energies) {
     const ctx = document.getElementById('energyDifferencesChart').getContext('2d');
@@ -239,21 +250,18 @@ function displayEnergyDifferences(energies) {
         energyDiffChart = new Chart(ctx, {
             type: 'line',
             data: { datasets: [] },
-            options: {
-                plugins: { title: { display: true, text: 'Energy differences (need 2+ states)' } }
-            }
+            options: { plugins: { title: { display: true, text: 'Energy differences (need 2+ states)' } } },
         });
         return;
     }
 
-    //Reproduces the desktop tool's transition labeling scheme
-    const freqsTHz = [];
+    const freqsTHz   = [];
     const tickLabels = [];
     for (let j = 0; j < energies.length - 1; j++) {
         const deltaMeV = (energies[j + 1] - energies[j]) * 1000;
         freqsTHz.push(deltaMeV / 4.1356);
         const i = j + 1;
-        tickLabels.push(i < 10 ? (11 * i + 10) : (101 * i + 100));
+        tickLabels.push(i < 10 ? 11 * i + 10 : 101 * i + 100);
     }
 
     const stemPoints = [];
@@ -270,28 +278,28 @@ function displayEnergyDifferences(energies) {
             datasets: [
                 {
                     data: stemPoints,
-                    borderColor: 'rgb(220, 53, 69)',
+                    borderColor: 'rgb(220,53,69)',
                     borderDash: [6, 4],
                     borderWidth: 1.5,
                     pointRadius: 0,
-                    spanGaps: false
+                    spanGaps: false,
                 },
                 {
                     type: 'scatter',
                     data: markerPoints,
                     pointStyle: 'circle',
                     pointRadius: 8,
-                    pointBorderColor: 'rgb(220, 53, 69)',
+                    pointBorderColor: 'rgb(220,53,69)',
                     pointBackgroundColor: 'rgba(0,0,0,0)',
-                    pointBorderWidth: 2
-                }
-            ]
+                    pointBorderWidth: 2,
+                },
+            ],
         },
         options: {
             responsive: true,
             plugins: {
                 legend: { display: false },
-                title: { display: true, text: 'Energy differences' }
+                title:  { display: true, text: 'Energy Differences' },
             },
             scales: {
                 x: {
@@ -299,17 +307,19 @@ function displayEnergyDifferences(energies) {
                     title: { display: true, text: 'fi' },
                     ticks: {
                         stepSize: 1,
-                        callback: (value) => {
+                        callback: value => {
                             const idx = Math.round(value);
                             return tickLabels[idx] !== undefined ? tickLabels[idx] : '';
-                        }
-                    }
+                        },
+                    },
                 },
-                y: { title: { display: true, text: 'f [THz]' } }
-            }
-        }
+                y: { title: { display: true, text: 'f [THz]' } },
+            },
+        },
     });
 }
+
+// ── Two QCL periods ───────────────────────────────────────────────────────────
 
 function displayTwoQCLPeriods(zGrid, potential, wavefunctions, energies) {
     const ctx = document.getElementById('qclPeriodsChart').getContext('2d');
@@ -319,13 +329,16 @@ function displayTwoQCLPeriods(zGrid, potential, wavefunctions, energies) {
     const Lper = zGrid[n - 1] - zGrid[0];
     const dropPerPeriod_meV = (potential[0] - potential[n - 1]) * 1000;
 
-    const periodColors = ['rgb(54, 162, 235)', 'rgb(220, 53, 69)'];
-    const wfColors = ['rgb(75, 192, 192)', 'rgb(255, 159, 64)', 'rgb(153, 102, 255)', 'rgb(255, 206, 86)'];
+    const periodColors = ['rgb(54,162,235)', 'rgb(220,53,69)'];
+    const wfColors     = [
+        'rgb(75,192,192)', 'rgb(255,159,64)',
+        'rgb(153,102,255)', 'rgb(255,206,86)',
+    ];
     const datasets = [];
 
     for (let p = 0; p < 2; p++) {
-        const shift = (p - 1) * Lper;                    
-        const baseOffset = dropPerPeriod_meV * (1 - p);    
+        const shift      = (p - 1) * Lper;
+        const baseOffset = dropPerPeriod_meV * (1 - p);
 
         datasets.push({
             label: 'V(z)',
@@ -334,7 +347,7 @@ function displayTwoQCLPeriods(zGrid, potential, wavefunctions, energies) {
             borderWidth: 3,
             pointRadius: 0,
             tension: 0,
-            fill: false
+            fill: false,
         });
 
         wavefunctions.forEach((wf, idx) => {
@@ -346,7 +359,7 @@ function displayTwoQCLPeriods(zGrid, potential, wavefunctions, energies) {
                 borderWidth: 2,
                 pointRadius: 0,
                 tension: 0.3,
-                fill: false
+                fill: false,
             });
         });
     }
@@ -358,65 +371,232 @@ function displayTwoQCLPeriods(zGrid, potential, wavefunctions, energies) {
             responsive: true,
             plugins: {
                 legend: { display: true },
-                title: { display: true, text: 'Two QCL Periods' }
+                title:  { display: true, text: 'Two QCL Periods' },
             },
             scales: {
                 x: { type: 'linear', title: { display: true, text: 'z [Å]' } },
-                y: { title: { display: true, text: 'V [meV]' } }
-            }
-        }
+                y: { title: { display: true, text: 'V [meV]' } },
+            },
+        },
     });
 }
 
+// ── Absorption spectrum ───────────────────────────────────────────────────────
+
+async function runAbsorption() {
+    if (!currentResults) {
+        const box = document.getElementById('absorptionError');
+        box.textContent = 'Run a simulation first before computing absorption.';
+        box.classList.remove('hidden');
+        return;
+    }
+
+    document.getElementById('absorptionError').classList.add('hidden');
+    document.getElementById('absorptionSuccess').classList.add('hidden');
+    document.getElementById('absorptionSpinner').classList.remove('hidden');
+    document.getElementById('absorptionSpinner').classList.add('active');
+
+    // Parse "state density" pairs
+    const populations = {};
+    document.getElementById('absorptionPopulations').value
+        .trim().split('\n')
+        .forEach(line => {
+            const p = line.trim().split(/\s+/);
+            if (p.length === 2) populations[p[0]] = parseFloat(p[1]);
+        });
+
+    // Parse "i j linewidth" triplets
+    const linewidths = {};
+    document.getElementById('absorptionLinewidths').value
+        .trim().split('\n')
+        .forEach(line => {
+            const p = line.trim().split(/\s+/);
+            if (p.length === 3) linewidths[`${p[0]},${p[1]}`] = parseFloat(p[2]);
+        });
+
+    const eMin = document.getElementById('absEnergyMin').value;
+    const eMax = document.getElementById('absEnergyMax').value;
+    const energy_range_meV = (eMin && eMax)
+        ? [parseFloat(eMin), parseFloat(eMax)]
+        : null;
+
+    const payload = {
+        material:        document.getElementById('material').value,
+        solver:          document.getElementById('solver').value,
+        subband_model:   document.getElementById('subband_model').value,
+        layer_structure: document.getElementById('layer_structure').value,
+        electric_field:  document.getElementById('electric_field').value,
+        grid_spacing:    document.getElementById('grid_spacing').value,
+        num_states:      document.getElementById('num_states').value,
+        populations,
+        linewidths,
+        energy_range_meV,
+        n_points: 2000,
+    };
+
+    try {
+        const response = await fetch('/api/absorption', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`Server error ${response.status}: ${text.slice(0, 200)}`);
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            renderAbsorptionChart(data.spectrum);
+            renderTransitionTable(data.transitions);
+            document.getElementById('absorptionSuccess').textContent =
+                'Absorption spectrum computed successfully.';
+            document.getElementById('absorptionSuccess').classList.remove('hidden');
+        } else {
+            const box = document.getElementById('absorptionError');
+            box.textContent = data.message;
+            box.classList.remove('hidden');
+        }
+    } catch (err) {
+        const box = document.getElementById('absorptionError');
+        box.textContent = `Request failed: ${err.message}`;
+        box.classList.remove('hidden');
+        console.error('Absorption error:', err);
+    } finally {
+        const sp = document.getElementById('absorptionSpinner');
+        sp.classList.add('hidden');
+        sp.classList.remove('active');
+    }
+}
+
+function renderAbsorptionChart(spectrum) {
+    const ctx = document.getElementById('absorptionChart').getContext('2d');
+    if (absorptionChart) absorptionChart.destroy();
+
+    absorptionChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: 'α(ħω) [cm⁻¹]',
+                    data: spectrum.hbar_omega_meV.map((e, i) => ({
+                        x: e,
+                        y: spectrum.alpha_cm[i],
+                    })),
+                    borderColor: 'rgb(118,75,162)',
+                    backgroundColor: 'rgba(118,75,162,0.07)',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    fill: true,
+                },
+                {
+                    label: 'α = 0',
+                    data: spectrum.hbar_omega_meV.map(e => ({ x: e, y: 0 })),
+                    borderColor: 'rgba(0,0,0,0.18)',
+                    borderDash: [5, 4],
+                    borderWidth: 1,
+                    pointRadius: 0,
+                    fill: false,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: true },
+                title:  { display: true, text: 'Intersubband Absorption Coefficient' },
+                tooltip: {
+                    callbacks: {
+                        label: c =>
+                            `α = ${c.parsed.y.toFixed(2)} cm⁻¹  @  ${c.parsed.x.toFixed(2)} meV`,
+                    },
+                },
+            },
+            scales: {
+                x: { type: 'linear', title: { display: true, text: 'ħω (meV)' } },
+                y: { title: { display: true, text: 'α (cm⁻¹)' } },
+            },
+        },
+    });
+}
+
+function renderTransitionTable(transitions) {
+    const tbody = document.getElementById('transitionTableBody');
+    tbody.innerHTML = '';
+    transitions.forEach(t => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${t.pair[0]} → ${t.pair[1]}</td>
+            <td>${t.E_ij_meV.toFixed(2)}</td>
+            <td>${t.f_ij.toFixed(4)}</td>
+            <td>${t.d_ij_nm.toFixed(3)}</td>
+            <td>${t.gamma_meV     !== null ? t.gamma_meV.toFixed(1)     : '—'}</td>
+            <td>${t.dN_m2.toExponential(2)}</td>
+            <td>${t.peak_alpha_cm !== null ? t.peak_alpha_cm.toFixed(1) : '—'}</td>`;
+        tbody.appendChild(row);
+    });
+    document.getElementById('transitionTableSection').classList.remove('hidden');
+}
+
+// ── Material info ─────────────────────────────────────────────────────────────
+
 async function loadMaterialInfo(e) {
     const material = e.target.value;
-    
     if (!material) {
         document.getElementById('materialInfoSection').classList.add('hidden');
         return;
     }
-    
     try {
         const response = await fetch(`/api/material-info?material=${material}`);
+        if (!response.ok) return;
         const data = await response.json();
-        
         if (data.status === 'success') {
-            document.getElementById('info-bandgap-well').textContent = data.band_gap.well.toFixed(4);
-            document.getElementById('info-bandgap-barrier').textContent = data.band_gap.barrier.toFixed(4);
-            document.getElementById('info-mass-well').textContent = data.effective_mass.well.toFixed(4);
-            document.getElementById('info-mass-barrier').textContent = data.effective_mass.barrier.toFixed(4);
-            document.getElementById('info-kane-well').textContent = data.kane_parameter.well.toFixed(4);
-            document.getElementById('info-kane-barrier').textContent = data.kane_parameter.barrier.toFixed(4);
+            document.getElementById('info-bandgap-well').textContent    = data.band_gap.well.toFixed(4)         + ' eV';
+            document.getElementById('info-bandgap-barrier').textContent = data.band_gap.barrier.toFixed(4)      + ' eV';
+            document.getElementById('info-mass-well').textContent       = data.effective_mass.well.toFixed(4)   + ' m₀';
+            document.getElementById('info-mass-barrier').textContent    = data.effective_mass.barrier.toFixed(4) + ' m₀';
+            document.getElementById('info-kane-well').textContent       = data.kane_parameter.well.toFixed(4)   + ' eV·Å²';
+            document.getElementById('info-kane-barrier').textContent    = data.kane_parameter.barrier.toFixed(4) + ' eV·Å²';
             document.getElementById('materialInfoSection').classList.remove('hidden');
         }
-    } catch (error) {
-        console.error('Error loading material info:', error);
+    } catch (err) {
+        console.error('Material info error:', err);
     }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function showLoadingSpinner(show) {
     const spinner = document.getElementById('loadingSpinner');
-    const submitBtn = document.getElementById('submitBtn');
-    
+    const label   = document.getElementById('loadingLabel');
+    const btn     = document.getElementById('submitBtn');
+
     if (show) {
         spinner.classList.remove('hidden');
-        submitBtn.disabled = true;
+        spinner.classList.add('active');     // enables CSS animation
+        label.classList.remove('hidden');
+        btn.disabled = true;
     } else {
         spinner.classList.add('hidden');
-        submitBtn.disabled = false;
+        spinner.classList.remove('active');  // stops animation
+        label.classList.add('hidden');
+        btn.disabled = false;
     }
 }
 
 function showErrorMessage(msg) {
-    const errorBox = document.getElementById('errorMessage');
-    errorBox.textContent = msg;
-    errorBox.classList.remove('hidden');
+    const box = document.getElementById('errorMessage');
+    box.textContent = msg;
+    box.classList.remove('hidden');
 }
 
 function showSuccessMessage(msg) {
-    const successBox = document.getElementById('successMessage');
-    successBox.textContent = msg;
-    successBox.classList.remove('hidden');
+    const box = document.getElementById('successMessage');
+    box.textContent = msg;
+    box.classList.remove('hidden');
 }
 
 function clearMessages() {

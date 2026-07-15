@@ -8,149 +8,275 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Optoelectronic Quantum Well Simulator</h1>
-            <p>Finite Difference Method (FDM) & Transfer Matrix Method (TMM) Solver</p>
+
+    <!-- ── Sticky sidebar ── -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h1>QW Simulator</h1>
+            <p>FDM &amp; TMM Solver</p>
+        </div>
+
+        <form id="simulatorForm" class="sidebar-form">
+
+            <div class="form-group">
+                <label for="material">Material System</label>
+                <select id="material" required>
+                    <option value="">-- Select --</option>
+                    <option value="AlGaAs">GaAs / AlGaAs</option>
+                    <option value="AlGaSb">GaSb / AlGaSb</option>
+                    <option value="InGaAs_InAlAs">InGaAs / InAlAs</option>
+                    <option value="InGaAs_GaAsSb">InGaAs / GaAsSb</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="solver">Solver</label>
+                <select id="solver" required>
+                    <option value="">-- Select --</option>
+                    <option value="TMM">Transfer Matrix (TMM)</option>
+                    <option value="FDM">Finite Difference (FDM)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="subband_model">Model</label>
+                <select id="subband_model" required>
+                    <option value="">-- Select --</option>
+                    <option value="parabolic">Parabolic</option>
+                    <option value="kane">Kane</option>
+                    <option value="taylor">Taylor</option>
+                    <option value="14kp">Ekenberg</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="layer_structure">Heterostructure Sequence</label>
+                <span class="help-text">Pairs of Width (Å) &amp; Molar fraction, space-separated.</span>
+                <textarea id="layer_structure" rows="4"
+                    placeholder="200 0.15 150 0.0 200 0.15" required>200 0.15 200 0.0 200 0.15</textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="electric_field">Electric Field (kV/cm)</label>
+                <input type="number" id="electric_field" value="0.0" step="0.1" min="0">
+            </div>
+
+            <div class="form-group">
+                <label for="grid_spacing">Grid Spacing dz (Å)</label>
+                <input type="number" id="grid_spacing" value="1.0" step="0.1" min="0.1">
+            </div>
+
+            <div class="form-group">
+                <label for="num_states">Target States</label>
+                <input type="number" id="num_states" value="4" step="1" min="1" max="20">
+            </div>
+
+            <button type="submit" id="submitBtn" class="btn-primary">
+                Execute Calculation
+            </button>
+            <div class="spinner-row">
+                <span id="loadingSpinner" class="spinner hidden"></span>
+                <span id="loadingLabel" class="loading-label hidden">Running…</span>
+            </div>
+
+        </form>
+
+        <!-- Material info card lives in the sidebar, shown after material selection -->
+        <div id="materialInfoSection" class="mat-info hidden">
+            <h4>Material Info</h4>
+            <div class="mat-grid">
+                <span class="mat-label">Band gap — well</span>
+                <span id="info-bandgap-well" class="mat-val">--</span>
+                <span class="mat-label">Band gap — barrier</span>
+                <span id="info-bandgap-barrier" class="mat-val">--</span>
+                <span class="mat-label">Eff. mass — well</span>
+                <span id="info-mass-well" class="mat-val">--</span>
+                <span class="mat-label">Eff. mass — barrier</span>
+                <span id="info-mass-barrier" class="mat-val">--</span>
+                <span class="mat-label">Kane P — well</span>
+                <span id="info-kane-well" class="mat-val">--</span>
+                <span class="mat-label">Kane P — barrier</span>
+                <span id="info-kane-barrier" class="mat-val">--</span>
+            </div>
+        </div>
+
+    </aside>
+
+    <!-- ── Scrollable results column ── -->
+    <main class="results-main" id="resultsMain">
+
+        <header class="page-header">
+            <h2>Optoelectronic Quantum Well Simulator</h2>
+            <p>Finite Difference Method (FDM) &amp; Transfer Matrix Method (TMM)</p>
         </header>
 
-        <div class="main-content">
-            <!-- Control Panel -->
-            <section class="control-panel">
-                <h2>Simulation Parameters</h2>
-                <form id="simulatorForm">
-                    <div class="form-group">
-                        <label for="material">Material System</label>
-                        <select id="material" required>
-                            <option value="">-- Select Material --</option>
-                            <option value="AlGaAs">GaAs/AlGaAs System</option>
-                            <option value="AlGaSb">GaSb/AlGaSb System</option>
-                            <option value="InGaAs_InAlAs">InGaAs/InAlAs System</option>
-                            <option value="InGaAs_GaAsSb">InGaAs/GaAsSb System</option>
-                        </select>
-                    </div>
+        <!-- Status messages -->
+        <div id="errorMessage"   class="msg-box error   hidden"></div>
+        <div id="successMessage" class="msg-box success hidden"></div>
 
-                    <div class="form-group">
-                        <label for="solver">Solver Approach</label>
-                        <select id="solver" required>
-                            <option value="">-- Select Solver --</option>
-                            <option value="TMM">Transfer Matrix Method (TMM)</option>
-                            <option value="FDM">Finite Difference Method (FDM)</option>
-                        </select>
-                    </div>
+        <!-- ── Energy table ── -->
+        <section id="energyLevelsSection" class="card hidden">
+            <h3 class="card-title">Energy Levels</h3>
+            <table id="energyTable">
+                <thead>
+                    <tr><th>State</th><th>Energy (eV)</th><th>Energy (meV)</th></tr>
+                </thead>
+                <tbody id="energyTableBody"></tbody>
+            </table>
+        </section>
 
-                    <div class="form-group">
-                        <label for="subband_model">Model</label>
-                        <select id="subband_model" required>
-                            <option value="">-- Select Model --</option>
-                            <option value="parabolic">Parabolic</option>
-                            <option value="kane">Kane</option>
-                            <option value="taylor">Taylor</option>
-                            <option value="14kp">Ekenberg</option>
-                        </select>
-                    </div>
+        <!-- ── Charts ── -->
+        <section id="chartsSection" class="hidden">
 
-                    <div class="form-group">
-                        <label for="layer_structure">Heterostructure Profile Sequence</label>
-                        <span class="help-text">Format: Alternate [Width in Å] [Molar Fraction x]. Space separated.</span>
-                        <textarea id="layer_structure" rows="4" placeholder="e.g., 200 0.15 150 0.0 200 0.15" required>200 0.15 200 0.0 200 0.15</textarea>
-                    </div>
+            <div class="card chart-card">
+                <h3 class="card-title">Bandstructure Profile</h3>
+                <canvas id="potentialChart"></canvas>
+            </div>
 
-                    <div class="form-row">
+            <div class="card chart-card">
+                <h3 class="card-title">Wavefunctions</h3>
+                <canvas id="wavefunctionChart"></canvas>
+            </div>
+
+            <div class="card chart-card">
+                <h3 class="card-title">Bound State Energies</h3>
+                <canvas id="boundStateEnergiesChart"></canvas>
+            </div>
+
+            <div class="card chart-card">
+                <h3 class="card-title">Energy Differences</h3>
+                <canvas id="energyDifferencesChart"></canvas>
+            </div>
+
+            <div class="card chart-card">
+                <h3 class="card-title">Two QCL Periods</h3>
+                <canvas id="qclPeriodsChart"></canvas>
+            </div>
+
+            <!-- ── Absorption panel ── -->
+            <div class="card" id="absorptionSection">
+                <h3 class="card-title">Absorption / Gain Spectrum</h3>
+
+                <div class="abs-inputs">
+                    <p class="help-text">Fill in populations and linewidths, then compute the spectrum.</p>
+
+                    <div class="abs-input-grid">
                         <div class="form-group">
-                            <label for="electric_field">Electric Field (kV/cm)</label>
-                            <input type="number" id="electric_field" value="0.0" step="0.1" min="0">
+                            <label>Sheet Densities N<sub>i</sub> (m⁻²)</label>
+                            <span class="help-text">One per line: &lt;state&gt; &lt;density&gt;</span>
+                            <textarea id="absorptionPopulations" rows="4"
+                                placeholder="1 5e14&#10;2 1e14">1 5e14 2 1e14</textarea>
                         </div>
+
                         <div class="form-group">
-                            <label for="grid_spacing">Grid Spacing dz (Å)</label>
-                            <input type="number" id="grid_spacing" value="1.0" step="0.1" min="0.1">
+                            <label>Linewidths Γ<sub>ij</sub> (meV FWHM)</label>
+                            <span class="help-text">One per line: &lt;i&gt; &lt;j&gt; &lt;meV&gt;</span>
+                            <textarea id="absorptionLinewidths" rows="4"
+                                placeholder="1 2 10&#10;1 3 15">1 2 10</textarea>
                         </div>
+
                         <div class="form-group">
-                            <label for="num_states">Number of Target States</label>
-                            <input type="number" id="num_states" value="4" step="1" min="1" max="20">
+                            <label>Energy Range (meV) — optional</label>
+                            <input type="number" id="absEnergyMin" placeholder="E min" step="1">
+                            <input type="number" id="absEnergyMax" placeholder="E max" step="1" style="margin-top:8px">
                         </div>
                     </div>
 
-                    <button type="submit" id="submitBtn" class="btn-primary">Execute Calculation</button>
-                    <span id="loadingSpinner" class="spinner hidden"></span>
-                </form>
-            </section>
+                    <button class="btn-secondary" onclick="runAbsorption()">
+                        Compute Absorption Spectrum
+                    </button>
+                    <span id="absorptionSpinner" class="spinner hidden" style="margin-left:10px;vertical-align:middle"></span>
 
-            <!-- Results Panel -->
-            <section class="results-panel">
-                <h2>Results & Analysis</h2>
-                
-                <div id="errorMessage" class="error-box hidden"></div>
-                <div id="successMessage" class="success-box hidden"></div>
-
-                <!-- Energy Levels Table -->
-                <div id="energyLevelsSection" class="results-section hidden">
-                    <h3>Energy Levels (eV)</h3>
-                    <table id="energyTable">
-                        <thead>
-                            <tr>
-                                <th>State</th>
-                                <th>Energy (eV)</th>
-                                <th>Energy (meV)</th>
-                            </tr>
-                        </thead>
-                        <tbody id="energyTableBody">
-                        </tbody>
-                    </table>
+                    <div id="absorptionError"   class="msg-box error   hidden" style="margin-top:12px"></div>
+                    <div id="absorptionSuccess" class="msg-box success hidden" style="margin-top:12px"></div>
                 </div>
 
-                <!-- Graphical Results -->
-                <div id="chartsSection" class="results-section hidden">
-                    <div class="chart-container">
-                        <h3>Bandstructure Profile</h3>
-                        <canvas id="potentialChart"></canvas>
-                    </div>
-                    
-                    <div class="chart-container">
-                        <h3>Wavefunctions</h3>
-                        <canvas id="wavefunctionChart"></canvas>
-                    </div>
+                <canvas id="absorptionChart" style="margin-top:24px"></canvas>
 
-                    <div class="chart-container">
-                        <h3>Bound State Energies</h3>
-                        <canvas id="boundStateEnergiesChart"></canvas>
-                    </div>
-
-                    <div class="chart-container">
-                        <h3>Energy Differences</h3>
-                        <canvas id="energyDifferencesChart"></canvas>
-                    </div>
-
-                    <div class="chart-container">
-                        <h3>Two QCL Periods</h3>
-                        <canvas id="qclPeriodsChart"></canvas>
+                <div id="transitionTableSection" class="hidden" style="margin-top:20px">
+                    <h4 class="card-subtitle">Transition Summary</h4>
+                    <div class="table-scroll">
+                        <table id="transitionTable">
+                            <thead>
+                                <tr>
+                                    <th>Transition</th>
+                                    <th>E<sub>ij</sub> (meV)</th>
+                                    <th>f<sub>ij</sub></th>
+                                    <th>|d<sub>ij</sub>| (nm)</th>
+                                    <th>Γ (meV)</th>
+                                    <th>ΔN (m⁻²)</th>
+                                    <th>Peak α (cm⁻¹)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transitionTableBody"></tbody>
+                        </table>
                     </div>
                 </div>
+            </div>
+            
+<!-- ── Diffusion model ── -->
+ <div class="card" id="DiffusionModel">
+                <h3 class="card-title">Diffusion Model</h3>
 
-                <!-- Material Info -->
-                <div id="materialInfoSection" class="results-section hidden">
-                    <h3>Material Information</h3>
-                    <div class="info-grid">
-                        <div class="info-card">
-                            <h4>Band Gap (eV)</h4>
-                            <p>Well: <span id="info-bandgap-well">--</span></p>
-                            <p>Barrier: <span id="info-bandgap-barrier">--</span></p>
+                <div class="abs-inputs">
+                    <p class="help-text">Fill in populations and linewidths, then compute the spectrum.</p>
+
+                    <div class="abs-input-grid">
+                        <div class="form-group">
+                            <label>Sheet Densities N<sub>i</sub> (m⁻²)</label>
+                            <span class="help-text">One per line: &lt;state&gt; &lt;density&gt;</span>
+                            <textarea id="absorptionPopulations" rows="4"
+                                placeholder="1 5e14&#10;2 1e14">1 5e14 2 1e14</textarea>
                         </div>
-                        <div class="info-card">
-                            <h4>Effective Mass (m₀)</h4>
-                            <p>Well: <span id="info-mass-well">--</span></p>
-                            <p>Barrier: <span id="info-mass-barrier">--</span></p>
+
+                        <div class="form-group">
+                            <label>Linewidths Γ<sub>ij</sub> (meV FWHM)</label>
+                            <span class="help-text">One per line: &lt;i&gt; &lt;j&gt; &lt;meV&gt;</span>
+                            <textarea id="absorptionLinewidths" rows="4"
+                                placeholder="1 2 10&#10;1 3 15">1 2 10</textarea>
                         </div>
-                        <div class="info-card">
-                            <h4>Kane Parameter (eV·Å²)</h4>
-                            <p>Well: <span id="info-kane-well">--</span></p>
-                            <p>Barrier: <span id="info-kane-barrier">--</span></p>
+
+                        <div class="form-group">
+                            <label>Energy Range (meV) — optional</label>
+                            <input type="number" id="absEnergyMin" placeholder="E min" step="1">
+                            <input type="number" id="absEnergyMax" placeholder="E max" step="1" style="margin-top:8px">
                         </div>
                     </div>
+
+                    <button class="btn-secondary" onclick="runAbsorption()">
+                        Compute Absorption Spectrum
+                    </button>
+                    <span id="absorptionSpinner" class="spinner hidden" style="margin-left:10px;vertical-align:middle"></span>
+
+                    <div id="absorptionError"   class="msg-box error   hidden" style="margin-top:12px"></div>
+                    <div id="absorptionSuccess" class="msg-box success hidden" style="margin-top:12px"></div>
                 </div>
-            </section>
-        </div>
-    </div>
+
+                <canvas id="absorptionChart" style="margin-top:24px"></canvas>
+
+                <div id="transitionTableSection" class="hidden" style="margin-top:20px">
+                    <h4 class="card-subtitle">Transition Summary</h4>
+                    <div class="table-scroll">
+                        <table id="transitionTable">
+                            <thead>
+                                <tr>
+                                    <th>Transition</th>
+                                    <th>E<sub>ij</sub> (meV)</th>
+                                    <th>f<sub>ij</sub></th>
+                                    <th>|d<sub>ij</sub>| (nm)</th>
+                                    <th>Γ (meV)</th>
+                                    <th>ΔN (m⁻²)</th>
+                                    <th>Peak α (cm⁻¹)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transitionTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
 
     <script src="app.js"></script>
 </body>
