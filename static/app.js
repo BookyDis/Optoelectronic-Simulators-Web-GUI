@@ -102,6 +102,23 @@ function downloadChart(canvasId, filename) {
 
 // ── Main simulation submit ────────────────────────────────────────────────────
 
+// Helper to extract table row values into a space-separated string
+function getLayerStructureString() {
+    const rows = document.querySelectorAll('#layerTableBody tr');
+    const tokens = [];
+
+    rows.forEach(row => {
+        const thickness = row.querySelector('.thickness')?.value.trim();
+        const alloy = row.querySelector('.alloy')?.value.trim();
+
+        if (thickness && alloy) {
+            tokens.push(thickness, alloy);
+        }
+    });
+
+    return tokens.join(' ');
+}
+
 async function handleSubmit(e) {
     e.preventDefault();
     clearMessages();
@@ -111,7 +128,7 @@ async function handleSubmit(e) {
         material:        document.getElementById('material').value,
         solver:          document.getElementById('solver').value,
         subband_model:   document.getElementById('subband_model').value,
-        layer_structure: document.getElementById('layer_structure').value,
+        layer_structure: getLayerStructureString(), // <-- Extracted from the HTML table
         electric_field:  document.getElementById('electric_field').value,
         grid_spacing:    document.getElementById('grid_spacing').value,
         num_states:      document.getElementById('num_states').value,
@@ -136,7 +153,7 @@ async function handleSubmit(e) {
             displayResults(data);
             showSuccessMessage(data.message);
             document.getElementById('energyLevelsSection')
-                .scrollIntoView({ behavior: 'smooth', block: 'start' });
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
             showErrorMessage(data.message || 'Simulation failed');
         }
@@ -147,6 +164,7 @@ async function handleSubmit(e) {
         showLoadingSpinner(false);
     }
 }
+
 
 // ── Display all results ───────────────────────────────────────────────────────
 
@@ -403,7 +421,7 @@ async function runAbsorption() {
         material:        document.getElementById('material').value,
         solver:          document.getElementById('solver').value,
         subband_model:   document.getElementById('subband_model').value,
-        layer_structure: document.getElementById('layer_structure').value,
+        layer_structure: getLayerStructureString(),
         electric_field:  document.getElementById('electric_field').value,
         grid_spacing:    document.getElementById('grid_spacing').value,
         num_states:      document.getElementById('num_states').value,
@@ -520,7 +538,7 @@ async function runDiffusion() {
         material:             document.getElementById('material').value,
         solver:               document.getElementById('solver').value,
         subband_model:        document.getElementById('subband_model').value,
-        layer_structure:      document.getElementById('layer_structure').value,
+        layer_structure:      getLayerStructureString(),
         electric_field:       document.getElementById('electric_field').value,
         grid_spacing:         document.getElementById('grid_spacing').value,
         num_states:           document.getElementById('num_states').value,
@@ -600,7 +618,7 @@ async function runSegregation() {
     setSpinnerActive('segregationSpinner', true);
 
     const payload = {
-        layer_structure: document.getElementById('layer_structure').value,
+        layer_structure: getLayerStructureString(),
         grid_spacing:    document.getElementById('grid_spacing').value,
         model_type:      document.getElementById('segModelType').value,
         param_value:     parseFloat(document.getElementById('segParamValue').value),
