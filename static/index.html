@@ -12,6 +12,8 @@
     <!-- ── Sticky sidebar ── -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
+            <button onclick="show('SimulatorquantumWell')">QW Simulator</button>
+            <button onclick="show('Simulatortransition')">Transition Calculator</button>
             <h1>QW Simulator</h1>
             <p>FDM &amp; TMM Solver</p>
         </div>
@@ -56,6 +58,43 @@
                     placeholder="200 0.15 150 0.0 200 0.15" required>200 0.15 200 0.0 200 0.15</textarea>
             </div>
 
+
+    <div class="form-group">
+  <label for="layer_structure">Heterostructure Sequence</label>
+  <span class="help-text">Specify Thickness (Å) and Alloy Profile (Molar fraction) for each layer.</span>
+
+  <table id="layerTable">
+    <thead>
+      <tr>
+        <th>Thickness</th>
+        <th>Alloy Profile</th>
+        <th></th> <!-- For delete buttons -->
+      </tr>
+    </thead>
+    <tbody id="layerTableBody">
+      <!-- Default rows -->
+      <tr>
+        <td><input type="number" step="any" class="thickness" value="200" required></td>
+        <td><input type="number" step="any" class="alloy" value="0.15" required></td>
+        <td><button type="button" class="remove-btn" onclick="removeRow(this)">✕</button></td>
+      </tr>
+      <tr>
+        <td><input type="number" step="any" class="thickness" value="200" required></td>
+        <td><input type="number" step="any" class="alloy" value="0.0" required></td>
+        <td><button type="button" class="remove-btn" onclick="removeRow(this)">✕</button></td>
+      </tr>
+      <tr>
+        <td><input type="number" step="any" class="thickness" value="200" required></td>
+        <td><input type="number" step="any" class="alloy" value="0.15" required></td>
+        <td><button type="button" class="remove-btn" onclick="removeRow(this)">✕</button></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <button type="button" onclick="addRow()">+ Add Layer</button>
+</div>
+
+
             <div class="form-group">
                 <label for="electric_field">Electric Field (kV/cm)</label>
                 <input type="number" id="electric_field" value="0.0" step="0.1" min="0">
@@ -78,7 +117,7 @@
                 <span id="loadingSpinner" class="spinner hidden"></span>
                 <span id="loadingLabel" class="loading-label hidden">Running…</span>
             </div>
-
+            
         </form>
 
         <div id="materialInfoSection" class="mat-info hidden">
@@ -93,10 +132,13 @@
             </div>
         </div>
     </aside>
+    <section></section>
 
-    <!-- ── Scrollable results column ── -->
+    <!-- ── Results column ── -->
     <main class="results-main" id="resultsMain">
 
+        <!-- section for Quantum Well Simulator -->
+        <div id="SimulatorquantumWell" class="divSimulator" style="">
         <header class="page-header">
             <h2>Optoelectronic Quantum Well Simulator</h2>
             <p>Finite Difference Method (FDM) &amp; Transfer Matrix Method (TMM)</p>
@@ -234,14 +276,12 @@
                             <label>Transport parameters</label>
                             <span class="help-text">One per line: &lt;state&gt; &lt;D m²/s&gt; &lt;τ s&gt;</span>
                             <!-- FIXED: each entry on its own line -->
-                            <textarea id="diffTransport" rows="4" style="font-family:monospace">1 1.0e-3 1.0e-12
-2 8.0e-4 5.0e-13</textarea>
+                            <textarea id="diffTransport" rows="4" style="font-family:monospace">1 1.0e-3 1.0e-12 2 8.0e-4 5.0e-13</textarea>
                         </div>
                         <div class="form-group">
                             <label>Generation rate G<sub>i</sub> (m⁻³ s⁻¹)</label>
                             <span class="help-text">One per line: &lt;state&gt; &lt;G&gt;</span>
-                            <textarea id="diffGeneration" rows="4" style="font-family:monospace">1 1.0e24
-2 0.0</textarea>
+                            <textarea id="diffGeneration" rows="4" style="font-family:monospace">1 1.0e24 2 0.0</textarea>
                         </div>
                     </div>
 
@@ -317,6 +357,16 @@
             </div>
 
         </section>
+    </div>
+
+        <!-- section for Transition Calculator -->
+        <div id="Simulatortransition" class="divSimulator" style="display:none">
+        <header class="page-header">
+            <h2>Transition Calculator</h2>
+        </header>  
+
+
+        </div>
     </main>
 
     <script src="app.js"></script>

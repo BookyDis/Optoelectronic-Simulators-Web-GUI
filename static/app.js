@@ -21,8 +21,65 @@ document.addEventListener('DOMContentLoaded', () => {
     if (segBtn) segBtn.addEventListener('click', runSegregation);
 });
 
-// ── Download helper ───────────────────────────────────────────────────────────
-// Works for any Chart.js canvas: renders to PNG and triggers download.
+// function for switching between Quantum Well simulator and Transition calculator
+function show(elementID) {
+// find the requested page and alert if it's not found
+  const ele = document.getElementById(elementID);
+  if (!ele) {
+    alert("no such element");
+    return;
+  }
+
+  // get all pages, loop through them and hide them
+  const pages = document.getElementsByClassName('divSimulator');
+  for (let i = 0; i < pages.length; i++) {
+    pages[i].style.display = 'none';
+  }
+
+  // then show the requested page
+  ele.style.display = 'block';
+}
+
+// Function to add a new empty row to the grid
+function addRow() {
+  const tbody = document.getElementById('layerTableBody');
+  const row = document.createElement('tr');
+  
+  row.innerHTML = `
+    <td><input type="number" step="any" class="thickness" placeholder="200" required></td>
+    <td><input type="number" step="any" class="alloy" placeholder="0.15" required></td>
+    <td><button type="button" class="remove-btn" onclick="removeRow(this)">✕</button></td>
+  `;
+  
+  tbody.appendChild(row);
+}
+
+// Function to remove a row
+function removeRow(button) {
+  const row = button.closest('tr');
+  // Optional: keep at least one row
+  if (document.querySelectorAll('#layerTableBody tr').length > 1) {
+    row.remove();
+  }
+}
+
+// Function to collect table data into your original format ("200 0.15 200 0.0 ...")
+function getSequenceString() {
+  const rows = document.querySelectorAll('#layerTableBody tr');
+  const pairs = [];
+
+  rows.forEach(row => {
+    const thickness = row.querySelector('.thickness').value;
+    const alloy = row.querySelector('.alloy').value;
+    if (thickness !== "" && alloy !== "") {
+      pairs.push(`${thickness} ${alloy}`);
+    }
+  });
+
+  return pairs.join(' ');
+}
+
+// ── Download function
 
 function downloadChart(canvasId, filename) {
     const canvas = document.getElementById(canvasId);
@@ -686,3 +743,4 @@ function clearMessages() {
     document.getElementById('errorMessage').classList.add('hidden');
     document.getElementById('successMessage').classList.add('hidden');
 }
+
