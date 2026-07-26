@@ -1,44 +1,30 @@
-#   This module is an addition to the software requested by the supervisor
+# further addition as requested by the supervisor
+#
 #   AbsorptionCalculator.py
-#   
-#   Computes the intersubband absorption coefficient α(ħω) for a quantum well
-#   heterostructure given pre-computed energies and wavefunctions.
+#
+#   Computes the intersubband absorption coefficient α(ħω).
 #
 #   Formula (Lorentzian lineshape, SI units throughout):
 #
 #       α(ħω) = (e² / (ε₀ n_r c m₀ L_eff))
-#               × Σ_{i<j}  ΔN_ij  × f_ij
+#               × Σ_{i<j}  ΔN_ij × f_ij
 #               × (Γ_ij / 2π) / [(ħω − E_ij)² + (Γ_ij/2)²]
 #
-#   where:
-#       ΔN_ij  = N_i − N_j          population inversion  [m⁻²]
-#       f_ij                         dimensionless oscillator strength
-#       Γ_ij                         FWHM linewidth        [J]
-#       E_ij   = E_j − E_i          transition energy     [J]
-#       L_eff                        effective well length  [m]
+#   Unit chain for f_ij (dimensionless):
+#       z          [m]  — from grid.get_z()
+#       psi        [m⁻½] — normalised so ∫|ψ|² dz = 1
+#       d_ij = ∫ψ_i z ψ_j dz   [m]
+#       f_ij = (2 m₀ / ħ²) × E_ij [J] × |d_ij|² [m²]   → dimensionless ✓
 #
-#   Sign convention: α > 0 means absorption, α < 0 means gain.
-#
-#   Usage
-#   -----
-#   from src.AbsorptionCalculator import AbsorptionCalculator
-#
-#   populations = {1: 5e14, 2: 1e14}          # state index (1-based) → sheet density [m⁻²]
-#   linewidths  = {(1,2): 10.0, (1,3): 15.0}  # (i,j) pair (1-based)  → FWHM [meV]
-#
-#   calc = AbsorptionCalculator(grid, energies, psis, material)
-#   hbar_omega, alpha = calc.get_spectrum(populations, linewidths)
-#   pairs, values     = calc.get_transition_table(populations, linewidths)
+#   Sign convention: α > 0 absorption, α < 0 gain.
 #
 
 import numpy as np
 from src import ConstAndScales
 from src.TransitionCalculator import TransitionCalculator
 
-
-# Physical constants not yet in ConstAndScales
-_EPS0 = 8.854187817e-12     # Permittivity of free space  [F/m]
-_C    = 2.99792458e8        # Speed of light              [m/s]
+_EPS0 = 8.854187817e-12     # [F/m]
+_C    = 2.99792458e8        # [m/s]
 
 
 class AbsorptionCalculator:
@@ -47,14 +33,10 @@ class AbsorptionCalculator:
 
     Parameters
     ----------
-    grid : Grid
-        The Grid object used for the solved structure (provides z, L_eff, n_r).
-    energies : np.ndarray
-        Bound-state energies in SI units [J], shape (nstates,).
-    psis : list of np.ndarray
-        Normalised wavefunctions, each shape (nz,).
-    material : Material
-        Material object — used only for the refractive index ``material.nr``.
+    grid     : Grid       — provides z-axis and L_eff
+    energies : np.ndarray — bound-state energies [J], shape (nstates,)
+    psis     : list       — normalised wavefunctions, each shape (nz,)
+    material : Material   — used for refractive index material.nr
     """
 
     def __init__(self, grid, energies, psis, material):
@@ -63,36 +45,60 @@ class AbsorptionCalculator:
         self.psis     = psis
         self.nr       = material.nr
 
-        self._tc      = TransitionCalculator()
+        z_si = grid.get_z()                     # [m]
+        self.L_eff = float(z_si[-1] - z_si[0]) # [m]
 
-        # Effective length: full well extent in metres
-        z = grid.get_z()
-        self.L_eff = float(z[-1] - z[0])   # [m]
-
-        # Pre-compute all pairwise transition quantities (upper > lower, i.e. j > i)
-        self._pairs = []    # list of (i, j) 1-based
-        self._E_ij  = {}    # [J]
-        self._f_ij  = {}    # dimensionless
-        self._d_ij  = {}    # [nm] for display
+        # Pre-compute pairwise quantities; all in SI
+        self._pairs = []
+        self._E_ij  = {}   # transition energy            [J]
+        self._f_ij  = {}   # oscillator strength          [dimensionless]
+        self._d_ij  = {}   # dipole matrix element        [m]
 
         nst = len(self.energies)
-        z_si = grid.get_z()
-
         for i in range(1, nst + 1):
             for j in range(i + 1, nst + 1):
-                E_ij = self._tc.get_energy_diff(self.energies, j, i)   # E_j − E_i > 0
-                f_ij = self._tc.get_oscillator_strength(z_si, self.energies, self.psis, j, i)
-                d_ij = self._tc.get_dipole(z_si, self.psis, j, i)      # [Å] from TC
+                # --- energy difference E_j - E_i  (> 0 since j > i) ---
+                E_ij = self._energy_diff(j, i)   # [J]
+                if E_ij is None or E_ij <= 0:
+                    continue
 
-                if E_ij is None or f_ij is None or d_ij is None:
+                # --- dipole matrix element in metres ---
+                d_ij = self._dipole_SI(z_si, j, i)   # [m]
+                if d_ij is None:
                     continue
-                if E_ij <= 0:
-                    continue
+
+                # --- oscillator strength (dimensionless) ---
+                # f = (2 m₀ / ħ²) × E_ij × |d_ij|²
+                f_ij = (2.0 * ConstAndScales.m0 / ConstAndScales.HBAR**2) * E_ij * d_ij**2
 
                 self._pairs.append((i, j))
                 self._E_ij[(i, j)] = E_ij
                 self._f_ij[(i, j)] = f_ij
-                self._d_ij[(i, j)] = d_ij   # [Å], TC already divides by ANGSTROM
+                self._d_ij[(i, j)] = d_ij
+
+    # ------------------------------------------------------------------
+    # Internal helpers — unit-explicit
+    # ------------------------------------------------------------------
+
+    def _energy_diff(self, i, j):
+        """E_i - E_j [J]; returns None if index out of range."""
+        if max(i, j) > len(self.energies):
+            return None
+        return float(self.energies[i - 1] - self.energies[j - 1])
+
+    def _dipole_SI(self, z_si, i, j):
+        """
+        ∫ ψ_i(z) · z · ψ_j(z) dz  [m]
+
+        z_si and psis must both be in SI (metres / m⁻½).
+        Uses np.trapezoid for accuracy.
+        """
+        if max(i, j) > len(self.psis):
+            return None
+        psi_i = np.asarray(self.psis[i - 1], dtype=np.float64)
+        psi_j = np.asarray(self.psis[j - 1], dtype=np.float64)
+        integrand = psi_i * z_si * psi_j
+        return abs(np.trapezoid(integrand, z_si))   # [m]
 
     # ------------------------------------------------------------------
     # Public API
@@ -101,34 +107,24 @@ class AbsorptionCalculator:
     def get_spectrum(self, populations, linewidths,
                      energy_range_meV=None, n_points=2000):
         """
-        Compute α(ħω) over a range of photon energies.
+        Compute α(ħω) [cm⁻¹] over a photon-energy range.
 
         Parameters
         ----------
-        populations : dict  {state_index (1-based): sheet_density [m⁻²]}
-            Sheet carrier density per subband.  Missing states default to 0.
-        linewidths : dict  {(i, j): FWHM_meV}
-            Per-transition FWHM linewidth in meV.  Pairs are 1-based, with
-            i < j (lower → upper).  A scalar default_linewidth_meV can be
-            supplied for any missing pair via the ``default_linewidth_meV``
-            keyword, otherwise missing pairs are skipped.
-        energy_range_meV : tuple (E_min, E_max) or None
-            Photon energy axis range in meV.  Defaults to spanning all
-            transition energies with ±30 meV padding.
-        n_points : int
-            Number of points on the photon energy axis.
+        populations     : dict  {state (1-based): N_i [m⁻²]}
+        linewidths      : dict  {(i,j) or (j,i): Γ FWHM [meV]}
+        energy_range_meV: (E_min, E_max) in meV, or None to auto-detect
+        n_points        : int, resolution of the energy axis
 
         Returns
         -------
-        hbar_omega_meV : np.ndarray  shape (n_points,)
-            Photon energy axis [meV].
-        alpha_cm : np.ndarray  shape (n_points,)
-            Absorption coefficient [cm⁻¹].  Positive = absorption, negative = gain.
+        hw_meV   : np.ndarray [meV]
+        alpha_cm : np.ndarray [cm⁻¹]   positive = absorption, negative = gain
         """
         if not self._pairs:
-            raise RuntimeError("No valid transitions found — check energies/wavefunctions.")
+            raise RuntimeError("No valid transitions found.")
 
-        # Build photon energy axis
+        # Energy axis
         if energy_range_meV is None:
             E_vals_meV = [v / ConstAndScales.meV for v in self._E_ij.values()]
             pad = 30.0
@@ -136,72 +132,63 @@ class AbsorptionCalculator:
                                  max(E_vals_meV) + pad)
 
         hw_meV = np.linspace(energy_range_meV[0], energy_range_meV[1], n_points)
-        hw_J   = hw_meV * ConstAndScales.meV   # [J]
+        hw_J   = hw_meV * ConstAndScales.meV
 
-        alpha = np.zeros(n_points, dtype=np.float64)
+        alpha  = np.zeros(n_points, dtype=np.float64)
 
+        # prefactor: e² / (ε₀ n_r c m₀ L_eff)   [m / (kg·s)]  × [m⁻²] → [m⁻¹]
         prefactor = (ConstAndScales.E**2
                      / (_EPS0 * self.nr * _C * ConstAndScales.m0 * self.L_eff))
 
         for (i, j) in self._pairs:
             lw_meV = linewidths.get((i, j)) or linewidths.get((j, i))
             if lw_meV is None:
-                continue                         # skip transitions with no linewidth
+                continue
 
-            Gamma_J  = lw_meV * ConstAndScales.meV     # FWHM [J]
-            E_ij_J   = self._E_ij[(i, j)]               # transition energy [J]
-            f_ij     = self._f_ij[(i, j)]
+            Gamma_J = lw_meV * ConstAndScales.meV      # [J]
+            E_ij_J  = self._E_ij[(i, j)]               # [J]
+            f_ij    = self._f_ij[(i, j)]               # dimensionless
 
             N_i = float(populations.get(i, 0.0))
             N_j = float(populations.get(j, 0.0))
-            dN  = N_i - N_j                             # population inversion [m⁻²]
+            dN  = N_i - N_j                            # [m⁻²]
 
-            # Lorentzian lineshape: L(x) = (Γ/2π) / (x² + (Γ/2)²)
-            x        = hw_J - E_ij_J
-            lorentz  = (Gamma_J / (2.0 * np.pi)) / (x**2 + (Gamma_J / 2.0)**2)
+            # Lorentzian: L(x) = (Γ/2π) / (x² + (Γ/2)²)
+            x       = hw_J - E_ij_J
+            lorentz = (Gamma_J / (2.0 * np.pi)) / (x**2 + (Gamma_J / 2.0)**2)
 
-            alpha   += prefactor * dN * f_ij * lorentz
+            alpha  += prefactor * dN * f_ij * lorentz  # [m⁻¹]
 
-        # Convert m⁻¹ → cm⁻¹
-        alpha_cm = alpha * 1e-2
-
-        return hw_meV, alpha_cm
+        return hw_meV, alpha * 1e-2   # → [cm⁻¹]
 
     def get_transition_table(self, populations, linewidths):
         """
-        Return a summary table of all transitions with their key quantities.
+        Summary table of all detected transitions.
 
         Returns
         -------
-        pairs : list of (i, j)
-        records : list of dict, each containing:
-            'pair'           : (i, j)
-            'E_ij_meV'       : transition energy [meV]
-            'f_ij'           : oscillator strength (dimensionless)
-            'd_ij_nm'        : dipole matrix element [nm]
-            'gamma_meV'      : FWHM linewidth [meV]  (None if not supplied)
-            'dN_m2'          : population inversion N_i − N_j [m⁻²]
-            'peak_alpha_cm'  : peak α at line centre [cm⁻¹] (None if Γ missing)
+        pairs   : list of (i, j)
+        records : list of dict with keys:
+                  pair, E_ij_meV, f_ij, d_ij_nm, gamma_meV, dN_m2, peak_alpha_cm
         """
-        records = []
         prefactor = (ConstAndScales.E**2
                      / (_EPS0 * self.nr * _C * ConstAndScales.m0 * self.L_eff))
 
+        records = []
         for (i, j) in self._pairs:
-            lw_meV = linewidths.get((i, j)) or linewidths.get((j, i))
+            lw_meV   = linewidths.get((i, j)) or linewidths.get((j, i))
             E_ij_meV = self._E_ij[(i, j)] / ConstAndScales.meV
             f_ij     = self._f_ij[(i, j)]
-            d_ij_nm  = self._d_ij[(i, j)] * ConstAndScales.ANGSTROM / 1e-9   # Å → nm
+            d_ij_nm  = self._d_ij[(i, j)] / 1e-9       # m → nm
 
             N_i = float(populations.get(i, 0.0))
             N_j = float(populations.get(j, 0.0))
             dN  = N_i - N_j
 
             if lw_meV is not None:
-                Gamma_J  = lw_meV * ConstAndScales.meV
-                # Peak of Lorentzian at line centre: L(0) = 2/(π Γ)
-                lorentz_peak = 2.0 / (np.pi * Gamma_J)
-                peak = prefactor * dN * f_ij * lorentz_peak * 1e-2   # cm⁻¹
+                Gamma_J      = lw_meV * ConstAndScales.meV
+                lorentz_peak = 2.0 / (np.pi * Gamma_J)  # peak of L at line centre
+                peak = prefactor * dN * f_ij * lorentz_peak * 1e-2
             else:
                 peak = None
 
@@ -218,5 +205,5 @@ class AbsorptionCalculator:
         return self._pairs, records
 
     def get_pairs(self):
-        """Return all detected transition pairs (1-based tuples)."""
+        """Return all detected transition pairs as 1-based (i, j) tuples."""
         return list(self._pairs)
