@@ -21,9 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (segBtn) segBtn.addEventListener('click', runSegregation);
 });
 
-// function for switching between Quantum Well simulator and Transition calculator
+// function for switching between Quantum Well simulator and Transition calculator  ────────────────────────────────────────────────────
 function show(elementID) {
-// find the requested page and alert if it's not found
+  // find the requested page and alert if it's not found
   const ele = document.getElementById(elementID);
   if (!ele) {
     alert("no such element");
@@ -38,6 +38,23 @@ function show(elementID) {
 
   // then show the requested page
   ele.style.display = 'block';
+
+  // --- Toggle Sweep K & Energy Comparison Fields ---
+  const sweepKGroup = document.getElementById('sweepKGroup');
+  const energyCompGroup = document.getElementById('energyCompGroup');
+  const sweepParameterGroup = document.getElementById('sweepParameterGroup');
+
+  if (sweepKGroup && energyCompGroup && sweepParameterGroup) {
+    if (elementID === 'Simulatortransition') {
+      sweepKGroup.classList.remove('hidden');
+      energyCompGroup.classList.remove('hidden');
+      sweepParameterGroup.classList.remove('hidden');
+    } else {
+      sweepKGroup.classList.add('hidden');
+      energyCompGroup.classList.add('hidden');
+      sweepParameterGroup.classList.add('hidden');
+    }
+  }
 }
 
 // Function to add a new empty row to the grid
@@ -53,6 +70,7 @@ function addRow() {
   
   tbody.appendChild(row);
 }
+//  Heterostructure grid function helper ────────────────────────────────────────────────────
 
 // Function to remove a row
 function removeRow(button) {
@@ -79,7 +97,7 @@ function getSequenceString() {
   return pairs.join(' ');
 }
 
-// ── Download function
+// ── Download function  ────────────────────────────────────────────────────
 
 function downloadChart(canvasId, filename) {
     const canvas = document.getElementById(canvasId);
@@ -128,7 +146,7 @@ async function handleSubmit(e) {
         material:        document.getElementById('material').value,
         solver:          document.getElementById('solver').value,
         subband_model:   document.getElementById('subband_model').value,
-        layer_structure: getLayerStructureString(), // <-- Extracted from the HTML table
+        layer_structure: getLayerStructureString(),
         electric_field:  document.getElementById('electric_field').value,
         grid_spacing:    document.getElementById('grid_spacing').value,
         num_states:      document.getElementById('num_states').value,

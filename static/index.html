@@ -89,7 +89,11 @@
 
                 <button type="button" onclick="addRow()">+ Add Layer</button>
             </div>
-
+            <!-- field for Sweep K -->
+            <div class="form-group hidden" id="sweepKGroup">
+                <label for="sweepKCheckbox">Sweep K?</label>
+                <input type="checkbox" id="sweepKCheckbox" value="sweepK">
+            </div>
             <!-- field for electric field -->
             <div class="form-group">
                 <label for="electric_field">Electric Field (kV/cm)</label>
@@ -104,6 +108,21 @@
             <div class="form-group">
                 <label for="num_states">Target States</label>
                 <input type="number" id="num_states" value="4" step="1" min="1" max="20">
+            </div>
+            <!-- field for energy level comparison -->
+            <div class="form-group hidden" id="energyCompGroup">
+                <label for="energy_comparison">Input energy level to compare</label>
+                <input type="number" id="energy_comparison" value="4" step="1" min="1" max="20">
+            </div>
+            <!-- Options for sweep parameter -->
+            <div class="form-group hidden" id="sweepParameterGroup">
+                <label>Choose sweep parameter:</label>
+                <div class="pill-button-group">
+                    <button type="button" class="pill-btn active" onclick="setSweepParam('wellWidth')">Sweep Well
+                        Width</button>
+                    <button type="button" class="pill-btn" onclick="setSweepParam('molarContent')">Sweep Molar
+                        Content</button>
+                </div>
             </div>
             <!-- calculation submit button -->
             <button type="submit" id="submitBtn" class="btn-primary">
@@ -135,7 +154,7 @@
     <main class="results-main" id="resultsMain">
 
         <!-- section for Quantum Well Simulator -->
-        <div id="SimulatorquantumWell" class="divSimulator" style="">
+        <div id="SimulatorquantumWell" class="divSimulator">
             <header class="page-header">
                 <h2>Optoelectronic Quantum Well Simulator</h2>
                 <p>Finite Difference Method (FDM) &amp; Transfer Matrix Method (TMM)</p>
