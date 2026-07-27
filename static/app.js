@@ -1,14 +1,14 @@
 // Frontend logic for Quantum Well Simulator
 
-let potentialChart    = null;
+let potentialChart = null;
 let wavefunctionChart = null;
-let boundStateChart   = null;
-let energyDiffChart   = null;
-let qclChart          = null;
-let absorptionChart   = null;
-let diffusionChart    = null;
-let segregationChart  = null;
-let currentResults    = null;
+let boundStateChart = null;
+let energyDiffChart = null;
+let qclChart = null;
+let absorptionChart = null;
+let diffusionChart = null;
+let segregationChart = null;
+let currentResults = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('simulatorForm').addEventListener('submit', handleSubmit);
@@ -23,78 +23,78 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // function for switching between Quantum Well simulator and Transition calculator  ────────────────────────────────────────────────────
 function show(elementID) {
-  // find the requested page and alert if it's not found
-  const ele = document.getElementById(elementID);
-  if (!ele) {
-    alert("no such element");
-    return;
-  }
-
-  // get all pages, loop through them and hide them
-  const pages = document.getElementsByClassName('divSimulator');
-  for (let i = 0; i < pages.length; i++) {
-    pages[i].style.display = 'none';
-  }
-
-  // then show the requested page
-  ele.style.display = 'block';
-
-  // --- Toggle Sweep K & Energy Comparison Fields ---
-  const sweepKGroup = document.getElementById('sweepKGroup');
-  const energyCompGroup = document.getElementById('energyCompGroup');
-  const sweepParameterGroup = document.getElementById('sweepParameterGroup');
-
-  if (sweepKGroup && energyCompGroup && sweepParameterGroup) {
-    if (elementID === 'Simulatortransition') {
-      sweepKGroup.classList.remove('hidden');
-      energyCompGroup.classList.remove('hidden');
-      sweepParameterGroup.classList.remove('hidden');
-    } else {
-      sweepKGroup.classList.add('hidden');
-      energyCompGroup.classList.add('hidden');
-      sweepParameterGroup.classList.add('hidden');
+    // find the requested page and alert if it's not found
+    const ele = document.getElementById(elementID);
+    if (!ele) {
+        alert("no such element");
+        return;
     }
-  }
+
+    // get all pages, loop through them and hide them
+    const pages = document.getElementsByClassName('divSimulator');
+    for (let i = 0; i < pages.length; i++) {
+        pages[i].style.display = 'none';
+    }
+
+    // then show the requested page
+    ele.style.display = 'block';
+
+    // --- Toggle Sweep K & Energy Comparison Fields ---
+    const sweepKGroup = document.getElementById('sweepKGroup');
+    const energyCompGroup = document.getElementById('energyCompGroup');
+    const sweepParameterGroup = document.getElementById('sweepParameterGroup');
+
+    if (sweepKGroup && energyCompGroup && sweepParameterGroup) {
+        if (elementID === 'Simulatortransition') {
+            sweepKGroup.classList.remove('hidden');
+            energyCompGroup.classList.remove('hidden');
+            sweepParameterGroup.classList.remove('hidden');
+        } else {
+            sweepKGroup.classList.add('hidden');
+            energyCompGroup.classList.add('hidden');
+            sweepParameterGroup.classList.add('hidden');
+        }
+    }
 }
 
 // Function to add a new empty row to the grid
 function addRow() {
-  const tbody = document.getElementById('layerTableBody');
-  const row = document.createElement('tr');
-  
-  row.innerHTML = `
+    const tbody = document.getElementById('layerTableBody');
+    const row = document.createElement('tr');
+
+    row.innerHTML = `
     <td><input type="number" step="any" class="thickness" placeholder="200" required></td>
     <td><input type="number" step="any" class="alloy" placeholder="0.15" required></td>
     <td><button type="button" class="remove-btn" onclick="removeRow(this)">✕</button></td>
   `;
-  
-  tbody.appendChild(row);
+
+    tbody.appendChild(row);
 }
 //  Heterostructure grid function helper ────────────────────────────────────────────────────
 
 // Function to remove a row
 function removeRow(button) {
-  const row = button.closest('tr');
-  // Optional: keep at least one row
-  if (document.querySelectorAll('#layerTableBody tr').length > 1) {
-    row.remove();
-  }
+    const row = button.closest('tr');
+    // Optional: keep at least one row
+    if (document.querySelectorAll('#layerTableBody tr').length > 1) {
+        row.remove();
+    }
 }
 
 // Function to collect table data into your original format ("200 0.15 200 0.0 ...")
 function getSequenceString() {
-  const rows = document.querySelectorAll('#layerTableBody tr');
-  const pairs = [];
+    const rows = document.querySelectorAll('#layerTableBody tr');
+    const pairs = [];
 
-  rows.forEach(row => {
-    const thickness = row.querySelector('.thickness').value;
-    const alloy = row.querySelector('.alloy').value;
-    if (thickness !== "" && alloy !== "") {
-      pairs.push(`${thickness} ${alloy}`);
-    }
-  });
+    rows.forEach(row => {
+        const thickness = row.querySelector('.thickness').value;
+        const alloy = row.querySelector('.alloy').value;
+        if (thickness !== "" && alloy !== "") {
+            pairs.push(`${thickness} ${alloy}`);
+        }
+    });
 
-  return pairs.join(' ');
+    return pairs.join(' ');
 }
 
 // ── Download function  ────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ function downloadChart(canvasId, filename) {
 
     // Draw onto a white-background offscreen canvas so the PNG isn't transparent
     const offscreen = document.createElement('canvas');
-    offscreen.width  = canvas.width;
+    offscreen.width = canvas.width;
     offscreen.height = canvas.height;
     const octx = offscreen.getContext('2d');
     octx.fillStyle = '#ffffff';
@@ -114,7 +114,7 @@ function downloadChart(canvasId, filename) {
 
     const link = document.createElement('a');
     link.download = `${filename}.png`;
-    link.href     = offscreen.toDataURL('image/png');
+    link.href = offscreen.toDataURL('image/png');
     link.click();
 }
 
@@ -143,20 +143,20 @@ async function handleSubmit(e) {
     showLoadingSpinner(true);
 
     const formData = {
-        material:        document.getElementById('material').value,
-        solver:          document.getElementById('solver').value,
-        subband_model:   document.getElementById('subband_model').value,
+        material: document.getElementById('material').value,
+        solver: document.getElementById('solver').value,
+        subband_model: document.getElementById('subband_model').value,
         layer_structure: getLayerStructureString(),
-        electric_field:  document.getElementById('electric_field').value,
-        grid_spacing:    document.getElementById('grid_spacing').value,
-        num_states:      document.getElementById('num_states').value,
+        electric_field: document.getElementById('electric_field').value,
+        grid_spacing: document.getElementById('grid_spacing').value,
+        num_states: document.getElementById('num_states').value,
     };
 
     try {
         const response = await fetch('/api/simulate', {
-            method:  'POST',
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify(formData),
+            body: JSON.stringify(formData),
         });
 
         if (!response.ok) {
@@ -216,7 +216,7 @@ function displayPotentialChart(zGrid, potential, wavefunctions, energies) {
     const ctx = document.getElementById('potentialChart').getContext('2d');
     if (potentialChart) potentialChart.destroy();
 
-    const wfColors = ['rgb(54,162,235)','rgb(255,99,132)','rgb(75,192,192)','rgb(255,206,86)','rgb(153,102,255)'];
+    const wfColors = ['rgb(54,162,235)', 'rgb(255,99,132)', 'rgb(75,192,192)', 'rgb(255,206,86)', 'rgb(153,102,255)'];
     const WF_SCALE = 1000;
 
     const datasets = [{
@@ -255,13 +255,13 @@ function displayWavefunctionChart(zGrid, wavefunctions, energies) {
     const ctx = document.getElementById('wavefunctionChart').getContext('2d');
     if (wavefunctionChart) wavefunctionChart.destroy();
 
-    const colors = ['rgb(255,99,132)','rgb(54,162,235)','rgb(75,192,192)','rgb(255,206,86)'];
+    const colors = ['rgb(255,99,132)', 'rgb(54,162,235)', 'rgb(75,192,192)', 'rgb(255,206,86)'];
 
     const datasets = wavefunctions.map((wf, idx) => ({
         label: `ψ${idx + 1}  (E = ${(energies[idx] * 1000).toFixed(2)} meV)`,
         data: Array.from(wf),
         borderColor: colors[idx % colors.length],
-        backgroundColor: colors[idx % colors.length].replace('rgb','rgba').replace(')',',0.1)'),
+        backgroundColor: colors[idx % colors.length].replace('rgb', 'rgba').replace(')', ',0.1)'),
         tension: 0.3, borderWidth: 2, pointRadius: 0,
     }));
 
@@ -293,10 +293,12 @@ function displayBoundStateEnergies(energies) {
 
     boundStateChart = new Chart(ctx, {
         type: 'line',
-        data: { datasets: [
-            { data: stemPoints, borderColor: 'rgb(70,90,230)', borderDash: [6,4], borderWidth: 1.5, pointRadius: 0, spanGaps: false },
-            { type: 'scatter', data: markerPoints, pointStyle: 'circle', pointRadius: 8, pointBorderColor: 'rgb(70,90,230)', pointBackgroundColor: 'rgba(0,0,0,0)', pointBorderWidth: 2 },
-        ]},
+        data: {
+            datasets: [
+                { data: stemPoints, borderColor: 'rgb(70,90,230)', borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, spanGaps: false },
+                { type: 'scatter', data: markerPoints, pointStyle: 'circle', pointRadius: 8, pointBorderColor: 'rgb(70,90,230)', pointBackgroundColor: 'rgba(0,0,0,0)', pointBorderWidth: 2 },
+            ]
+        },
         options: {
             responsive: true,
             plugins: { legend: { display: false }, title: { display: true, text: 'Bound State Energies' } },
@@ -330,16 +332,20 @@ function displayEnergyDifferences(energies) {
 
     energyDiffChart = new Chart(ctx, {
         type: 'line',
-        data: { datasets: [
-            { data: stemPoints, borderColor: 'rgb(220,53,69)', borderDash: [6,4], borderWidth: 1.5, pointRadius: 0, spanGaps: false },
-            { type: 'scatter', data: markerPoints, pointStyle: 'circle', pointRadius: 8, pointBorderColor: 'rgb(220,53,69)', pointBackgroundColor: 'rgba(0,0,0,0)', pointBorderWidth: 2 },
-        ]},
+        data: {
+            datasets: [
+                { data: stemPoints, borderColor: 'rgb(220,53,69)', borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, spanGaps: false },
+                { type: 'scatter', data: markerPoints, pointStyle: 'circle', pointRadius: 8, pointBorderColor: 'rgb(220,53,69)', pointBackgroundColor: 'rgba(0,0,0,0)', pointBorderWidth: 2 },
+            ]
+        },
         options: {
             responsive: true,
             plugins: { legend: { display: false }, title: { display: true, text: 'Energy Differences' } },
             scales: {
-                x: { type: 'linear', title: { display: true, text: 'Transition' },
-                     ticks: { stepSize: 1, callback: v => tickLabels[Math.round(v)] ?? '' } },
+                x: {
+                    type: 'linear', title: { display: true, text: 'Transition' },
+                    ticks: { stepSize: 1, callback: v => tickLabels[Math.round(v)] ?? '' }
+                },
                 y: { title: { display: true, text: 'f (THz)' } },
             },
         },
@@ -356,12 +362,12 @@ function displayTwoQCLPeriods(zGrid, potential, wavefunctions, energies) {
     const Lper = zGrid[n - 1] - zGrid[0];
     const dropMeV = (potential[0] - potential[n - 1]) * 1000;
     const periodColors = ['rgb(54,162,235)', 'rgb(220,53,69)'];
-    const wfColors = ['rgb(75,192,192)','rgb(255,159,64)','rgb(153,102,255)','rgb(255,206,86)'];
+    const wfColors = ['rgb(75,192,192)', 'rgb(255,159,64)', 'rgb(153,102,255)', 'rgb(255,206,86)'];
     const datasets = [];
 
     for (let p = 0; p < 2; p++) {
         const shift = (p - 1) * Lper;
-        const off   = dropMeV * (1 - p);
+        const off = dropMeV * (1 - p);
         datasets.push({
             label: p === 0 ? 'V(z)' : undefined,
             data: zGrid.map((z, i) => ({ x: z + shift, y: potential[i] * 1000 + off })),
@@ -436,13 +442,13 @@ async function runAbsorption() {
     const eMax = document.getElementById('absEnergyMax').value;
 
     const payload = {
-        material:        document.getElementById('material').value,
-        solver:          document.getElementById('solver').value,
-        subband_model:   document.getElementById('subband_model').value,
+        material: document.getElementById('material').value,
+        solver: document.getElementById('solver').value,
+        subband_model: document.getElementById('subband_model').value,
         layer_structure: getLayerStructureString(),
-        electric_field:  document.getElementById('electric_field').value,
-        grid_spacing:    document.getElementById('grid_spacing').value,
-        num_states:      document.getElementById('num_states').value,
+        electric_field: document.getElementById('electric_field').value,
+        grid_spacing: document.getElementById('grid_spacing').value,
+        num_states: document.getElementById('num_states').value,
         populations,
         linewidths,
         energy_range_meV: (eMin && eMax) ? [parseFloat(eMin), parseFloat(eMax)] : null,
@@ -482,19 +488,21 @@ function renderAbsorptionChart(spectrum) {
 
     absorptionChart = new Chart(ctx, {
         type: 'line',
-        data: { datasets: [
-            {
-                label: 'α(ħω) [cm⁻¹]',
-                data: spectrum.hbar_omega_meV.map((e, i) => ({ x: e, y: spectrum.alpha_cm[i] })),
-                borderColor: 'rgb(118,75,162)', backgroundColor: 'rgba(118,75,162,0.07)',
-                borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true,
-            },
-            {
-                label: 'α = 0',
-                data: spectrum.hbar_omega_meV.map(e => ({ x: e, y: 0 })),
-                borderColor: 'rgba(0,0,0,0.18)', borderDash: [5,4], borderWidth: 1, pointRadius: 0, fill: false,
-            },
-        ]},
+        data: {
+            datasets: [
+                {
+                    label: 'α(ħω) [cm⁻¹]',
+                    data: spectrum.hbar_omega_meV.map((e, i) => ({ x: e, y: spectrum.alpha_cm[i] })),
+                    borderColor: 'rgb(118,75,162)', backgroundColor: 'rgba(118,75,162,0.07)',
+                    borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true,
+                },
+                {
+                    label: 'α = 0',
+                    data: spectrum.hbar_omega_meV.map(e => ({ x: e, y: 0 })),
+                    borderColor: 'rgba(0,0,0,0.18)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: false,
+                },
+            ]
+        },
         options: {
             responsive: true,
             plugins: {
@@ -520,7 +528,7 @@ function renderTransitionTable(transitions) {
             <td>${t.E_ij_meV.toFixed(2)}</td>
             <td>${t.f_ij.toFixed(5)}</td>
             <td>${t.d_ij_nm.toFixed(3)}</td>
-            <td>${t.gamma_meV     !== null ? t.gamma_meV.toFixed(1)     : '—'}</td>
+            <td>${t.gamma_meV !== null ? t.gamma_meV.toFixed(1) : '—'}</td>
             <td>${t.dN_m2.toExponential(2)}</td>
             <td>${t.peak_alpha_cm !== null ? t.peak_alpha_cm.toFixed(1) : '—'}</td>`;
         tbody.appendChild(row);
@@ -540,26 +548,28 @@ async function runDiffusion() {
 
     // Parse transport: "state D tau" per line
     const transport_properties = {};
-    document.getElementById('diffTransport').value.trim().split('\n').forEach(line => {
-        const p = line.trim().split(/\s+/);
-        if (p.length === 3) transport_properties[p[0]] = [parseFloat(p[1]), parseFloat(p[2])];
-    });
-
+    const tTokens = document.getElementById('diffTransport').value.trim().split(/\s+/);
+    for (let i = 0; i < tTokens.length; i += 3) {
+        if (tTokens[i] && tTokens[i + 1] && tTokens[i + 2]) {
+            transport_properties[tTokens[i]] = [parseFloat(tTokens[i + 1]), parseFloat(tTokens[i + 2])];
+        }
+    }
     // Parse generation: "state G" per line
     const generation = {};
-    document.getElementById('diffGeneration').value.trim().split('\n').forEach(line => {
-        const p = line.trim().split(/\s+/);
-        if (p.length === 2) generation[p[0]] = parseFloat(p[1]);
-    });
-
+    const gTokens = document.getElementById('diffGeneration').value.trim().split(/\s+/);
+    for (let i = 0; i < gTokens.length; i += 2) {
+        if (gTokens[i] && gTokens[i + 1]) {
+            generation[gTokens[i]] = parseFloat(gTokens[i + 1]);
+        }
+    }
     const payload = {
-        material:             document.getElementById('material').value,
-        solver:               document.getElementById('solver').value,
-        subband_model:        document.getElementById('subband_model').value,
-        layer_structure:      getLayerStructureString(),
-        electric_field:       document.getElementById('electric_field').value,
-        grid_spacing:         document.getElementById('grid_spacing').value,
-        num_states:           document.getElementById('num_states').value,
+        material: document.getElementById('material').value,
+        solver: document.getElementById('solver').value,
+        subband_model: document.getElementById('subband_model').value,
+        layer_structure: getLayerStructureString(),
+        electric_field: document.getElementById('electric_field').value,
+        grid_spacing: document.getElementById('grid_spacing').value,
+        num_states: document.getElementById('num_states').value,
         transport_properties, // key the backend now expects
         generation,
     };
@@ -572,7 +582,7 @@ async function runDiffusion() {
         });
         if (!response.ok) {
             const text = await response.text();
-            throw new Error(`HTTP error ${response.status}: ${text.slice(0,200)}`);
+            throw new Error(`HTTP error ${response.status}: ${text.slice(0, 200)}`);
         }
         const data = await response.json();
 
@@ -595,7 +605,7 @@ function displayDiffusionChart(zGrid, spatialPops) {
     const ctx = document.getElementById('diffusionChart').getContext('2d');
     if (diffusionChart) diffusionChart.destroy();
 
-    const colors = ['rgb(255,99,132)','rgb(54,162,235)','rgb(75,192,192)','rgb(153,102,255)'];
+    const colors = ['rgb(255,99,132)', 'rgb(54,162,235)', 'rgb(75,192,192)', 'rgb(153,102,255)'];
     const datasets = Object.keys(spatialPops).map((sb, idx) => ({
         label: `Subband ${sb}`,
         data: zGrid.map((z, i) => ({ x: z, y: spatialPops[sb][i] })),
@@ -637,10 +647,10 @@ async function runSegregation() {
 
     const payload = {
         layer_structure: getLayerStructureString(),
-        grid_spacing:    document.getElementById('grid_spacing').value,
-        model_type:      document.getElementById('segModelType').value,
-        param_value:     parseFloat(document.getElementById('segParamValue').value),
-        asymmetric:      document.getElementById('segAsymmetric').value === 'true',
+        grid_spacing: document.getElementById('grid_spacing').value,
+        model_type: document.getElementById('segModelType').value,
+        param_value: parseFloat(document.getElementById('segParamValue').value),
+        asymmetric: document.getElementById('segAsymmetric').value === 'true',
     };
 
     try {
@@ -671,20 +681,22 @@ function displaySegregationChart(z, xNominal, xSmeared) {
 
     segregationChart = new Chart(ctx, {
         type: 'line',
-        data: { datasets: [
-            {
-                label: 'Nominal (sharp)',
-                data: z.map((v, i) => ({ x: v, y: xNominal[i] })),
-                borderColor: 'rgb(120,120,120)', borderDash: [5,5],
-                borderWidth: 2, pointRadius: 0, tension: 0, fill: false,
-            },
-            {
-                label: 'Smeared',
-                data: z.map((v, i) => ({ x: v, y: xSmeared[i] })),
-                borderColor: 'rgb(118,75,162)',
-                borderWidth: 3, pointRadius: 0, tension: 0.1, fill: false,
-            },
-        ]},
+        data: {
+            datasets: [
+                {
+                    label: 'Nominal (sharp)',
+                    data: z.map((v, i) => ({ x: v, y: xNominal[i] })),
+                    borderColor: 'rgb(120,120,120)', borderDash: [5, 5],
+                    borderWidth: 2, pointRadius: 0, tension: 0, fill: false,
+                },
+                {
+                    label: 'Smeared',
+                    data: z.map((v, i) => ({ x: v, y: xSmeared[i] })),
+                    borderColor: 'rgb(118,75,162)',
+                    borderWidth: 3, pointRadius: 0, tension: 0.1, fill: false,
+                },
+            ]
+        },
         options: {
             responsive: true,
             plugins: { title: { display: true, text: 'Interface Segregation / Smearing' } },
@@ -706,12 +718,12 @@ async function loadMaterialInfo(e) {
         if (!response.ok) return;
         const data = await response.json();
         if (data.status === 'success') {
-            document.getElementById('info-bandgap-well').textContent     = data.band_gap.well.toFixed(4)           + ' eV';
-            document.getElementById('info-bandgap-barrier').textContent  = data.band_gap.barrier.toFixed(4)        + ' eV';
-            document.getElementById('info-mass-well').textContent        = data.effective_mass.well.toFixed(4)     + ' m₀';
-            document.getElementById('info-mass-barrier').textContent     = data.effective_mass.barrier.toFixed(4)  + ' m₀';
-            document.getElementById('info-kane-well').textContent        = data.kane_parameter.well.toFixed(4)     + ' eV·Å²';
-            document.getElementById('info-kane-barrier').textContent     = data.kane_parameter.barrier.toFixed(4)  + ' eV·Å²';
+            document.getElementById('info-bandgap-well').textContent = data.band_gap.well.toFixed(4) + ' eV';
+            document.getElementById('info-bandgap-barrier').textContent = data.band_gap.barrier.toFixed(4) + ' eV';
+            document.getElementById('info-mass-well').textContent = data.effective_mass.well.toFixed(4) + ' m₀';
+            document.getElementById('info-mass-barrier').textContent = data.effective_mass.barrier.toFixed(4) + ' m₀';
+            document.getElementById('info-kane-well').textContent = data.kane_parameter.well.toFixed(4) + ' eV·Å²';
+            document.getElementById('info-kane-barrier').textContent = data.kane_parameter.barrier.toFixed(4) + ' eV·Å²';
             document.getElementById('materialInfoSection').classList.remove('hidden');
         }
     } catch (err) { console.error('Material info error:', err); }
@@ -758,8 +770,8 @@ function clearSegregationMessages() {
 
 function showLoadingSpinner(show) {
     const spinner = document.getElementById('loadingSpinner');
-    const label   = document.getElementById('loadingLabel');
-    const btn     = document.getElementById('submitBtn');
+    const label = document.getElementById('loadingLabel');
+    const btn = document.getElementById('submitBtn');
     spinner.classList.toggle('hidden', !show);
     label.classList.toggle('hidden', !show);
     btn.disabled = show;

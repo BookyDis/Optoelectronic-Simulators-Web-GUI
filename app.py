@@ -11,6 +11,8 @@ from src.Solvers_TMM         import Parabolic_TMM, Taylor_TMM, Kane_TMM, Ekenber
 from src.AbsorptionCalculator import AbsorptionCalculator
 from src.DiffusionCalculator  import DiffusionCalculator
 from src.SegregationCalculator     import SegregationCalculator
+from src.Sweep_Visualisation import SweepVisualisation
+from src.TransitionCalculator import TransitionCalculator
 
 app = Flask(__name__, static_folder='static', static_url_path='')
 
@@ -151,9 +153,34 @@ def diffusion():
             if 1 <= sb <= nst and len(vals) == 2:
                 diff.set_properties(subband=sb, D=float(vals[0]), tau=float(vals[1]))
 
-        # Build uniform generation profiles
+        # Build spatially-resolved generation profiles.
+        #
+        # NOTE: a spatially *uniform* generation rate G(z)=G0 combined with
+        # zero-flux (Neumann) boundaries has an exact steady-state analytic
+        # solution N(z) = G0*tau -- a perfectly flat line, since a constant
+        # already satisfies dN/dz=0 everywhere. That produced the "flat
+        # line" bug. Physically, carriers are photogenerated in proportion
+        # to where the pumped subband's wavefunction actually lives, so we
+        # weight the user-supplied rate (interpreted as an areal generation
+        # rate, m^-2 s^-1) by the normalised probability density |psi_i(z)|^2
+        # (m^-1, since the integral of |psi|^2 dz = 1) of that subband's
+        # eigenstate:
+        #
+        #   G_i(z) = G_i_input * |psi_i(z)|^2   ->  [m^-2 s^-1]*[m^-1] = [m^-3 s^-1]
+        #
+        # This preserves the total generation rate (integral of G_i(z) dz
+        # = G_i_input) while localising it spatially, giving a physically
+        # meaningful, non-flat steady-state carrier profile peaked in the
+        # well(s) rather than a flat line.
         gen_raw    = params.get('generation', {})
-        generation = {int(k): np.ones(nz)*float(v) for k,v in gen_raw.items()}
+        generation = {}
+        for k, v in gen_raw.items():
+            sb = int(k)
+            if 1 <= sb <= len(wfs):
+                psi = np.asarray(wfs[sb - 1], dtype=np.float64)
+                generation[sb] = float(v) * (psi ** 2)
+            else:
+                generation[sb] = np.zeros(nz)
 
         spatial = diff.solve_steady_state(generation)
         sheets  = diff.get_sheet_densities(spatial)

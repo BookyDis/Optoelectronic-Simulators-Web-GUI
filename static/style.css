@@ -313,6 +313,21 @@ body {
 #chartsSection { display:flex; flex-direction:column; gap:22px; }
 .chart-card canvas { max-height:400px; }
 
+/* ── Input grids inside spectroscopy-style panels ────────── */
+.abs-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.abs-input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px;
+}
+@media (max-width:960px) {
+    .abs-input-grid { grid-template-columns: 1fr; }
+}
+
 /* ── Input grids inside calc panels ──────────────────────── */
 .calc-inputs {
     background: var(--bg);
