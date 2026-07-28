@@ -11,7 +11,6 @@ from src.Solvers_TMM         import Parabolic_TMM, Taylor_TMM, Kane_TMM, Ekenber
 from src.AbsorptionCalculator import AbsorptionCalculator
 from src.DiffusionCalculator  import DiffusionCalculator
 from src.SegregationCalculator     import SegregationCalculator
-from src.Sweep_Visualisation import SweepVisualisation
 from src.TransitionCalculator import TransitionCalculator
 
 app = Flask(__name__, static_folder='static', static_url_path='')
@@ -229,6 +228,126 @@ def segregation():
             "z":         seg.get_z().tolist(),
             "x_nominal": seg.get_nominal_profile().tolist(),
             "x_smeared": x_smeared.tolist(),
+        })
+    except ValueError as e: return jsonify({"status":"error","message":str(e)}), 400
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status":"error","message":str(e)}), 500
+
+# ── /api/transition ───────────────────────────────────────────────────────────
+@app.route('/api/transition', methods=['POST'])
+def transition():
+    """
+    Compute a single transition (energy difference, dipole moment, and
+    oscillator strength) between two subbands at one electric field value.
+
+    Expected extra params (beyond standard structure params):
+        state_i : int  lower state (1-based), default 1
+        state_j : int  upper state (1-based), default 2
+    """
+    try:
+        params = request.json
+        grid, energies, wfs, *_ = build_grid_and_solve(params)
+
+        i = int(params.get('state_i', 1))
+        j = int(params.get('state_j', 2))
+        if i < 1 or j < 1 or i > len(energies) or j > len(energies):
+            raise ValueError(f"State indices must be within 1..{len(energies)} "
+                              f"(only {len(energies)} bound states found).")
+
+        z = grid.get_z()
+        tc = TransitionCalculator()
+        e_ij, d_ij, f_ij = tc.calculate(z, energies, wfs, i, j)
+
+        if e_ij is None or d_ij is None or f_ij is None:
+            raise ValueError("Could not compute transition for the requested states.")
+
+        return jsonify({
+            "status": "success",
+            "transition": {
+                "state_i":    i,
+                "state_j":    j,
+                "E_ij_meV":   _safe(e_ij / ConstAndScales.meV),
+                "d_ij_A":     _safe(d_ij),
+                "f_ij":       _safe(f_ij),
+                "electric_field": float(params.get('electric_field', 0.0)),
+            }
+        })
+    except ValueError as e: return jsonify({"status":"error","message":str(e)}), 400
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({"status":"error","message":str(e)}), 500
+
+# ── /api/transition-sweep ───────────────────────────────────────────────────────
+@app.route('/api/transition-sweep', methods=['POST'])
+def transition_sweep():
+    """
+    Sweep the electric field (K) and compute the transition quantities at
+    each point.
+
+    Expected extra params (beyond standard structure params, electric_field
+    is ignored in favour of the sweep range):
+        state_i : int    lower state (1-based), default 1
+        state_j : int    upper state (1-based), default 2
+        k_start : float  sweep start [kV/cm]
+        k_end   : float  sweep end   [kV/cm]
+        k_step  : float  sweep step  [kV/cm], must be > 0
+    """
+    try:
+        params = dict(request.json or {})
+
+        i = int(params.get('state_i', 1))
+        j = int(params.get('state_j', 2))
+        k_start = float(params.get('k_start', 0.0))
+        k_end   = float(params.get('k_end', 0.0))
+        k_step  = float(params.get('k_step', 1.0))
+
+        if k_step <= 0:
+            raise ValueError("k_step must be greater than 0.")
+        if k_end < k_start:
+            raise ValueError("k_end must be greater than or equal to k_start.")
+
+        k_values = np.arange(k_start, k_end + k_step/2.0, k_step)
+        if len(k_values) == 0:
+            raise ValueError("Sweep range produced no points.")
+        if len(k_values) > 200:
+            raise ValueError(f"Sweep would run {len(k_values)} points — "
+                              f"please use a coarser k_step (max 200 points).")
+
+        tc = TransitionCalculator()
+        k_out, e_out, d_out, f_out = [], [], [], []
+
+        for K in k_values:
+            sweep_params = dict(params)
+            sweep_params['electric_field'] = float(K)
+            grid, energies, wfs, *_ = build_grid_and_solve(sweep_params)
+
+            if i > len(energies) or j > len(energies):
+                continue
+
+            z = grid.get_z()
+            e_ij, d_ij, f_ij = tc.calculate(z, energies, wfs, i, j)
+            if e_ij is None or d_ij is None or f_ij is None:
+                continue
+
+            k_out.append(float(K))
+            e_out.append(_safe(e_ij / ConstAndScales.meV))
+            d_out.append(_safe(d_ij))
+            f_out.append(_safe(f_ij))
+
+        if not k_out:
+            raise ValueError("No valid transitions found across the sweep range "
+                              "— try fewer target states or a different range.")
+
+        return jsonify({
+            "status": "success",
+            "state_i": i, "state_j": j,
+            "sweep": {
+                "k_kVcm":    k_out,
+                "E_ij_meV":  e_out,
+                "d_ij_A":    d_out,
+                "f_ij":      f_out,
+            }
         })
     except ValueError as e: return jsonify({"status":"error","message":str(e)}), 400
     except Exception as e:

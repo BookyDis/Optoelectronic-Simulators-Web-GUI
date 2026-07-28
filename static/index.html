@@ -20,7 +20,7 @@
             <p>FDM &amp; TMM Solver</p>
         </div>
 
-        <form id="simulatorForm" class="sidebar-form">
+        <form id="simulatorForm" class="sidebar-form" novalidate>
             <!-- field for material system -->
             <div class="form-group">
                 <label for="material">Material System</label>
@@ -91,13 +91,35 @@
             </div>
             <!-- field for Sweep K -->
             <div class="form-group hidden" id="sweepKGroup">
-                <label for="sweepKCheckbox">Sweep K?</label>
-                <input type="checkbox" id="sweepKCheckbox" value="sweepK">
+                <label class="sweep-toggle" id="sweepKToggleLabel" for="sweepKCheckbox">
+                    <input type="checkbox" id="sweepKCheckbox" value="sweepK">
+                    <span class="sweep-toggle-box"></span>
+                    <span class="sweep-toggle-text">Sweep K?</span>
+                </label>
             </div>
-            <!-- field for electric field -->
-            <div class="form-group">
+            <!-- field for electric field (single value) -->
+            <div class="form-group" id="electricFieldSingleGroup">
                 <label for="electric_field">Electric Field (kV/cm)</label>
                 <input type="number" id="electric_field" value="0.0" step="0.1" min="0">
+            </div>
+            <!-- fields for electric field sweep (K start / end / step) -->
+            <div class="form-group hidden" id="electricFieldSweepGroup">
+                <label>Electric Field Sweep (kV/cm)</label>
+                <span class="help-text">Sweep parameters for the transition vs. K plot.</span>
+                <div class="form-row-3">
+                    <div>
+                        <label for="k_start" style="font-weight:600;font-size:.72em">K start</label>
+                        <input type="number" id="k_start" value="0.0" step="0.1">
+                    </div>
+                    <div>
+                        <label for="k_end" style="font-weight:600;font-size:.72em">K end</label>
+                        <input type="number" id="k_end" value="50.0" step="0.1">
+                    </div>
+                    <div>
+                        <label for="k_step" style="font-weight:600;font-size:.72em">K step</label>
+                        <input type="number" id="k_step" value="5.0" step="0.1" min="0.01">
+                    </div>
+                </div>
             </div>
             <!-- field for grid spacing -->
             <div class="form-group">
@@ -109,28 +131,15 @@
                 <label for="num_states">Target States</label>
                 <input type="number" id="num_states" value="4" step="1" min="1" max="20">
             </div>
-            <!-- field for energy level comparison -->
-            <div class="form-group hidden" id="energyCompGroup">
-                <label for="energy_comparison">Input energy level to compare</label>
-                <input type="number" id="energy_comparison" value="4" step="1" min="1" max="20">
-            </div>
-            <!-- Options for sweep parameter -->
-            <div class="form-group hidden" id="sweepParameterGroup">
-                <label>Choose sweep parameter:</label>
-                <div class="pill-button-group">
-                    <button type="button" class="pill-btn active" onclick="setSweepParam('wellWidth')">Sweep Well
-                        Width</button>
-                    <button type="button" class="pill-btn" onclick="setSweepParam('molarContent')">Sweep Molar
-                        Content</button>
+            <!-- calculation submit button (Quantum Well Simulator only) -->
+            <div id="qwSubmitGroup">
+                <button type="submit" id="submitBtn" class="btn-primary">
+                    Execute Calculation
+                </button>
+                <div class="spinner-row">
+                    <span id="loadingSpinner" class="spinner hidden"></span>
+                    <span id="loadingLabel" class="loading-label hidden">Running…</span>
                 </div>
-            </div>
-            <!-- calculation submit button -->
-            <button type="submit" id="submitBtn" class="btn-primary">
-                Execute Calculation
-            </button>
-            <div class="spinner-row">
-                <span id="loadingSpinner" class="spinner hidden"></span>
-                <span id="loadingLabel" class="loading-label hidden">Running…</span>
             </div>
 
         </form>
@@ -306,15 +315,15 @@
                             <div class="form-group">
                                 <label>Transport parameters</label>
                                 <span class="help-text">One per line: &lt;state&gt; &lt;D m²/s&gt; &lt;τ s&gt;</span>
-                                <!-- FIXED: each entry on its own line -->
-                                <textarea id="diffTransport" rows="4"
-                                    style="font-family:monospace">1 1.0e-3 1.0e-12 2 8.0e-4 5.0e-13</textarea>
+                                <textarea id="diffTransport" rows="4" style="font-family:monospace">1 1.0e-3 1.0e-12
+2 8.0e-4 5.0e-13</textarea>
                             </div>
+
                             <div class="form-group">
                                 <label>Generation rate G<sub>i</sub> (m⁻³ s⁻¹)</label>
                                 <span class="help-text">One per line: &lt;state&gt; &lt;G&gt;</span>
-                                <textarea id="diffGeneration" rows="4"
-                                    style="font-family:monospace">1 1.0e24 2 0.0</textarea>
+                                <textarea id="diffGeneration" rows="4" style="font-family:monospace">1 1.0e24
+2 0.0</textarea>
                             </div>
                         </div>
 
@@ -405,9 +414,92 @@
         <div id="Simulatortransition" class="divSimulator" style="display:none">
             <header class="page-header">
                 <h2>Transition Calculator</h2>
+                <p>Energy difference, dipole moment &amp; oscillator strength between two subbands</p>
             </header>
 
+            <div id="transitionError" class="msg-box error   hidden"></div>
+            <div id="transitionSuccess" class="msg-box success hidden"></div>
 
+            <section class="card">
+                <h3 class="card-title">Energy Level Difference</h3>
+                <p class="help-text" style="margin-bottom:10px">
+                    Choose two energy levels to compare — the transition energy, dipole moment,
+                    and oscillator strength are computed between them.
+                </p>
+                <div class="calc-inputs">
+                    <div class="input-grid-3">
+                        <div class="form-group" style="margin-bottom:0">
+                            <label for="state_i">Energy Level i</label>
+                            <input type="number" id="state_i" value="1" step="1" min="1" max="20">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0">
+                            <label for="state_j">Energy Level j</label>
+                            <input type="number" id="state_j" value="2" step="1" min="1" max="20">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Single-point mode (Sweep K unchecked) -->
+                <div id="transitionSingleControls">
+                    <button type="button" id="runTransitionBtn" class="btn-primary">Compute Transition</button>
+                    <div class="spinner-row">
+                        <span id="transitionSpinner" class="spinner hidden"></span>
+                        <span class="loading-label hidden" id="transitionLoadingLabel">Running…</span>
+                    </div>
+                </div>
+
+                <!-- Sweep mode (Sweep K checked) -->
+                <div id="transitionSweepControls" class="hidden">
+                    <button type="button" id="runTransitionSweepBtn" class="btn-primary">Run K Sweep</button>
+                    <div class="spinner-row">
+                        <span id="transitionSweepSpinner" class="spinner hidden"></span>
+                        <span class="loading-label hidden" id="transitionSweepLoadingLabel">Sweeping…</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Single-point result -->
+            <section class="card hidden" id="transitionResultCard">
+                <h3 class="card-title">Transition Result</h3>
+                <div class="mat-grid">
+                    <span class="mat-label">Transition</span> <span class="mat-val" id="tr-pair">--</span>
+                    <span class="mat-label">Energy difference E<sub>ij</sub></span> <span class="mat-val"
+                        id="tr-eij">--</span>
+                    <span class="mat-label">Dipole moment |d<sub>ij</sub>|</span> <span class="mat-val"
+                        id="tr-dij">--</span>
+                    <span class="mat-label">Oscillator strength f<sub>ij</sub></span> <span class="mat-val"
+                        id="tr-fij">--</span>
+                    <span class="mat-label">Electric field</span> <span class="mat-val" id="tr-field">--</span>
+                </div>
+            </section>
+
+            <!-- Sweep results -->
+            <section id="transitionSweepCharts" class="hidden" style="display:flex;flex-direction:column;gap:22px">
+                <div class="card chart-card">
+                    <div class="chart-header">
+                        <h3 class="card-title">Energy Difference vs. Electric Field</h3>
+                        <button class="btn-download"
+                            onclick="downloadChart('transitionEChart','transition_energy_vs_K')">↓ PNG</button>
+                    </div>
+                    <canvas id="transitionEChart"></canvas>
+                </div>
+                <div class="card chart-card">
+                    <div class="chart-header">
+                        <h3 class="card-title">Dipole Moment vs. Electric Field</h3>
+                        <button class="btn-download"
+                            onclick="downloadChart('transitionDChart','transition_dipole_vs_K')">↓ PNG</button>
+                    </div>
+                    <canvas id="transitionDChart"></canvas>
+                </div>
+                <div class="card chart-card">
+                    <div class="chart-header">
+                        <h3 class="card-title">Oscillator Strength vs. Electric Field</h3>
+                        <button class="btn-download"
+                            onclick="downloadChart('transitionFChart','transition_oscstrength_vs_K')">↓ PNG</button>
+                    </div>
+                    <canvas id="transitionFChart"></canvas>
+                </div>
+            </section>
         </div>
     </main>
 

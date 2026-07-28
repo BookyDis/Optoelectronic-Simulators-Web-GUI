@@ -358,6 +358,72 @@ tbody tr:hover { background: var(--indigo-lt); }
 
 #energyTable  { font-size:.9em; }
 
+/* ── Sweep-K toggle (pill with custom checkmark box) ─────── */
+.sweep-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg);
+    cursor: pointer;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+    width: fit-content;
+}
+.sweep-toggle:hover { border-color: var(--indigo); }
+
+.sweep-toggle input[type=checkbox] {
+    position: absolute;
+    opacity: 0;
+    width: 0; height: 0;
+    margin: 0;
+}
+
+.sweep-toggle-box {
+    position: relative;
+    width: 19px; height: 19px;
+    flex-shrink: 0;
+    border: 2px solid var(--border);
+    border-radius: 5px;
+    background: var(--white);
+    transition: background .15s, border-color .15s;
+}
+.sweep-toggle-box::after {
+    content: "";
+    position: absolute;
+    left: 5px; top: 1px;
+    width: 5px; height: 10px;
+    border: solid #fff;
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform .12s ease-in;
+}
+
+.sweep-toggle input[type=checkbox]:checked ~ .sweep-toggle-box {
+    background: linear-gradient(135deg, var(--indigo), var(--purple));
+    border-color: var(--indigo);
+}
+.sweep-toggle input[type=checkbox]:checked ~ .sweep-toggle-box::after {
+    transform: rotate(45deg) scale(1);
+}
+.sweep-toggle input[type=checkbox]:focus-visible ~ .sweep-toggle-box {
+    box-shadow: 0 0 0 3px var(--indigo-lt);
+}
+
+.sweep-toggle-text {
+    font-size: .88em;
+    font-weight: 700;
+    color: var(--text);
+    user-select: none;
+}
+
+.sweep-toggle.active {
+    border-color: var(--indigo);
+    background: var(--indigo-lt);
+}
+.sweep-toggle.active .sweep-toggle-text { color: var(--indigo); }
+
 /* ── Toggle label ─────────────────────────────────────────── */
 .toggle-label {
     display:flex; align-items:center; gap:7px;

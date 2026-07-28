@@ -8,6 +8,9 @@ let qclChart = null;
 let absorptionChart = null;
 let diffusionChart = null;
 let segregationChart = null;
+let transitionEChart = null;
+let transitionDChart = null;
+let transitionFChart = null;
 let currentResults = null;
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -19,6 +22,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const segBtn = document.getElementById('runSegregationBtn');
     if (segBtn) segBtn.addEventListener('click', runSegregation);
+
+    const sweepKCheckbox = document.getElementById('sweepKCheckbox');
+    if (sweepKCheckbox) sweepKCheckbox.addEventListener('change', toggleSweepKMode);
+
+    const transitionBtn = document.getElementById('runTransitionBtn');
+    if (transitionBtn) transitionBtn.addEventListener('click', runTransition);
+
+    const transitionSweepBtn = document.getElementById('runTransitionSweepBtn');
+    if (transitionSweepBtn) transitionSweepBtn.addEventListener('click', runTransitionSweep);
+
+    // Inside DOMContentLoaded in app.js:
+    document.getElementById('k_start').disabled = true;
+    document.getElementById('k_end').disabled = true;
+    document.getElementById('k_step').disabled = true;
 });
 
 // function for switching between Quantum Well simulator and Transition calculator  ────────────────────────────────────────────────────
@@ -39,22 +56,51 @@ function show(elementID) {
     // then show the requested page
     ele.style.display = 'block';
 
-    // --- Toggle Sweep K & Energy Comparison Fields ---
+    // --- Toggle page-specific sidebar controls ---
     const sweepKGroup = document.getElementById('sweepKGroup');
-    const energyCompGroup = document.getElementById('energyCompGroup');
-    const sweepParameterGroup = document.getElementById('sweepParameterGroup');
+    const qwSubmitGroup = document.getElementById('qwSubmitGroup');
+    const isTransition = elementID === 'Simulatortransition';
 
-    if (sweepKGroup && energyCompGroup && sweepParameterGroup) {
-        if (elementID === 'Simulatortransition') {
-            sweepKGroup.classList.remove('hidden');
-            energyCompGroup.classList.remove('hidden');
-            sweepParameterGroup.classList.remove('hidden');
-        } else {
-            sweepKGroup.classList.add('hidden');
-            energyCompGroup.classList.add('hidden');
-            sweepParameterGroup.classList.add('hidden');
+    if (sweepKGroup) sweepKGroup.classList.toggle('hidden', !isTransition);
+    if (qwSubmitGroup) qwSubmitGroup.classList.toggle('hidden', isTransition);
+
+    // Leaving the transition page: reset sweep-K mode back to the single
+    // electric-field field so the QW simulator behaves normally.
+    if (!isTransition) {
+        const sweepKCheckbox = document.getElementById('sweepKCheckbox');
+        if (sweepKCheckbox && sweepKCheckbox.checked) {
+            sweepKCheckbox.checked = false;
+            toggleSweepKMode();
         }
     }
+}
+
+// ── Sweep-K toggle: swap electric field single input <-> K start/end/step ──
+
+function toggleSweepKMode() {
+    const checked = document.getElementById('sweepKCheckbox').checked;
+
+    const toggleLabel = document.getElementById('sweepKToggleLabel');
+    if (toggleLabel) toggleLabel.classList.toggle('active', checked);
+
+    document.getElementById('electricFieldSingleGroup').classList.toggle('hidden', checked);
+    document.getElementById('electricFieldSweepGroup').classList.toggle('hidden', !checked);
+
+    // Enable/disable inputs so hidden controls aren't validated
+    document.getElementById('k_start').disabled = !checked;
+    document.getElementById('k_end').disabled = !checked;
+    document.getElementById('k_step').disabled = !checked;
+
+    const singleControls = document.getElementById('transitionSingleControls');
+    const sweepControls = document.getElementById('transitionSweepControls');
+    if (singleControls) singleControls.classList.toggle('hidden', checked);
+    if (sweepControls) sweepControls.classList.toggle('hidden', !checked);
+
+    // Clear whichever result view no longer applies
+    const resultCard = document.getElementById('transitionResultCard');
+    const sweepCharts = document.getElementById('transitionSweepCharts');
+    if (checked && resultCard) resultCard.classList.add('hidden');
+    if (!checked && sweepCharts) sweepCharts.classList.add('hidden');
 }
 
 // Function to add a new empty row to the grid
@@ -548,20 +594,27 @@ async function runDiffusion() {
 
     // Parse transport: "state D tau" per line
     const transport_properties = {};
-    const tTokens = document.getElementById('diffTransport').value.trim().split(/\s+/);
-    for (let i = 0; i < tTokens.length; i += 3) {
-        if (tTokens[i] && tTokens[i + 1] && tTokens[i + 2]) {
-            transport_properties[tTokens[i]] = [parseFloat(tTokens[i + 1]), parseFloat(tTokens[i + 2])];
+    const transportTokens = document.getElementById('diffTransport').value.trim().split(/\s+/);
+    for (let i = 0; i + 2 < transportTokens.length; i += 3) {
+        const sb = transportTokens[i];
+        const D = parseFloat(transportTokens[i + 1]);
+        const tau = parseFloat(transportTokens[i + 2]);
+        if (sb && !isNaN(D) && !isNaN(tau)) {
+            transport_properties[sb] = [D, tau];
         }
     }
-    // Parse generation: "state G" per line
+
+    // Parse generation: chunk tokens into pairs [state, G]
     const generation = {};
-    const gTokens = document.getElementById('diffGeneration').value.trim().split(/\s+/);
-    for (let i = 0; i < gTokens.length; i += 2) {
-        if (gTokens[i] && gTokens[i + 1]) {
-            generation[gTokens[i]] = parseFloat(gTokens[i + 1]);
+    const genTokens = document.getElementById('diffGeneration').value.trim().split(/\s+/);
+    for (let i = 0; i + 1 < genTokens.length; i += 2) {
+        const sb = genTokens[i];
+        const G = parseFloat(genTokens[i + 1]);
+        if (sb && !isNaN(G)) {
+            generation[sb] = G;
         }
     }
+
     const payload = {
         material: document.getElementById('material').value,
         solver: document.getElementById('solver').value,
@@ -708,6 +761,212 @@ function displaySegregationChart(z, xNominal, xSmeared) {
     });
 }
 
+// ── Transition Calculator ────────────────────────────────────────────────────
+
+function getTransitionStructurePayload() {
+    return {
+        material: document.getElementById('material').value,
+        solver: document.getElementById('solver').value,
+        subband_model: document.getElementById('subband_model').value,
+        layer_structure: getLayerStructureString(),
+        grid_spacing: document.getElementById('grid_spacing').value,
+        num_states: document.getElementById('num_states').value,
+    };
+}
+
+async function runTransition() {
+    clearTransitionMessages();
+
+    const state_i = parseInt(document.getElementById('state_i').value, 10);
+    const state_j = parseInt(document.getElementById('state_j').value, 10);
+    if (!state_i || !state_j || state_i === state_j) {
+        showTransitionMessage('Choose two different state indices for i and j.', 'error');
+        return;
+    }
+
+    setSpinnerActive('transitionSpinner', true);
+    document.getElementById('transitionLoadingLabel').classList.remove('hidden');
+    document.getElementById('runTransitionBtn').disabled = true;
+
+    const payload = {
+        ...getTransitionStructurePayload(),
+        electric_field: document.getElementById('electric_field').value,
+        state_i, state_j,
+    };
+
+    try {
+        const response = await fetch('/api/transition', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`Server error ${response.status}: ${text.slice(0, 200)}`);
+        }
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            displayTransitionResult(data.transition);
+            showTransitionMessage('Transition computed successfully.', 'success');
+        } else {
+            showTransitionMessage(data.message, 'error');
+        }
+    } catch (err) {
+        showTransitionMessage(`Error: ${err.message}`, 'error');
+        console.error('Transition error:', err);
+    } finally {
+        setSpinnerActive('transitionSpinner', false);
+        document.getElementById('transitionLoadingLabel').classList.add('hidden');
+        document.getElementById('runTransitionBtn').disabled = false;
+    }
+}
+
+function displayTransitionResult(t) {
+    document.getElementById('tr-pair').textContent = `${t.state_i} → ${t.state_j}`;
+    document.getElementById('tr-eij').textContent = `${t.E_ij_meV.toFixed(3)} meV`;
+    document.getElementById('tr-dij').textContent = `${t.d_ij_A.toFixed(3)} Å`;
+    document.getElementById('tr-fij').textContent = t.f_ij.toFixed(5);
+    document.getElementById('tr-field').textContent = `${t.electric_field} kV/cm`;
+    document.getElementById('transitionResultCard').classList.remove('hidden');
+}
+
+async function runTransitionSweep() {
+    clearTransitionMessages();
+
+    const state_i = parseInt(document.getElementById('state_i').value, 10);
+    const state_j = parseInt(document.getElementById('state_j').value, 10);
+    if (!state_i || !state_j || state_i === state_j) {
+        showTransitionMessage('Choose two different state indices for i and j.', 'error');
+        return;
+    }
+
+    const k_start = parseFloat(document.getElementById('k_start').value);
+    const k_end = parseFloat(document.getElementById('k_end').value);
+    const k_step = parseFloat(document.getElementById('k_step').value);
+    if (isNaN(k_start) || isNaN(k_end) || isNaN(k_step) || k_step <= 0 || k_end < k_start) {
+        showTransitionMessage('Check the K sweep range: K end must be ≥ K start, and K step must be > 0.', 'error');
+        return;
+    }
+
+    setSpinnerActive('transitionSweepSpinner', true);
+    document.getElementById('transitionSweepLoadingLabel').classList.remove('hidden');
+    document.getElementById('runTransitionSweepBtn').disabled = true;
+
+    const payload = {
+        ...getTransitionStructurePayload(),
+        state_i, state_j, k_start, k_end, k_step,
+    };
+
+    try {
+        const response = await fetch('/api/transition-sweep', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`Server error ${response.status}: ${text.slice(0, 200)}`);
+        }
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            displayTransitionSweepCharts(data.sweep, data.state_i, data.state_j);
+            showTransitionMessage(`K sweep completed — ${data.sweep.k_kVcm.length} points.`, 'success');
+        } else {
+            showTransitionMessage(data.message, 'error');
+        }
+    } catch (err) {
+        showTransitionMessage(`Error: ${err.message}`, 'error');
+        console.error('Transition sweep error:', err);
+    } finally {
+        setSpinnerActive('transitionSweepSpinner', false);
+        document.getElementById('transitionSweepLoadingLabel').classList.add('hidden');
+        document.getElementById('runTransitionSweepBtn').disabled = false;
+    }
+}
+
+function displayTransitionSweepCharts(sweep, i, j) {
+    const label = `${i} → ${j}`;
+
+    const eCtx = document.getElementById('transitionEChart').getContext('2d');
+    if (transitionEChart) transitionEChart.destroy();
+    transitionEChart = new Chart(eCtx, {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: `E_${label} (meV)`,
+                data: sweep.k_kVcm.map((k, idx) => ({ x: k, y: sweep.E_ij_meV[idx] })),
+                borderColor: 'rgb(102,126,234)', borderWidth: 2, pointRadius: 3, tension: 0.25, fill: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true }, title: { display: true, text: 'Transition Energy vs. Electric Field' } },
+            scales: {
+                x: { type: 'linear', title: { display: true, text: 'K (kV/cm)' } },
+                y: { title: { display: true, text: 'E_ij (meV)' } },
+            },
+        },
+    });
+
+    const dCtx = document.getElementById('transitionDChart').getContext('2d');
+    if (transitionDChart) transitionDChart.destroy();
+    transitionDChart = new Chart(dCtx, {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: `|d_${label}| (Å)`,
+                data: sweep.k_kVcm.map((k, idx) => ({ x: k, y: sweep.d_ij_A[idx] })),
+                borderColor: 'rgb(118,75,162)', borderWidth: 2, pointRadius: 3, tension: 0.25, fill: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true }, title: { display: true, text: 'Dipole Moment vs. Electric Field' } },
+            scales: {
+                x: { type: 'linear', title: { display: true, text: 'K (kV/cm)' } },
+                y: { title: { display: true, text: '|d_ij| (Å)' } },
+            },
+        },
+    });
+
+    const fCtx = document.getElementById('transitionFChart').getContext('2d');
+    if (transitionFChart) transitionFChart.destroy();
+    transitionFChart = new Chart(fCtx, {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: `f_${label}`,
+                data: sweep.k_kVcm.map((k, idx) => ({ x: k, y: sweep.f_ij[idx] })),
+                borderColor: 'rgb(56,178,172)', borderWidth: 2, pointRadius: 3, tension: 0.25, fill: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true }, title: { display: true, text: 'Oscillator Strength vs. Electric Field' } },
+            scales: {
+                x: { type: 'linear', title: { display: true, text: 'K (kV/cm)' } },
+                y: { title: { display: true, text: 'f_ij' } },
+            },
+        },
+    });
+
+    document.getElementById('transitionSweepCharts').classList.remove('hidden');
+}
+
+function showTransitionMessage(msg, type) {
+    const id = type === 'error' ? 'transitionError' : 'transitionSuccess';
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.classList.remove('hidden');
+}
+
+function clearTransitionMessages() {
+    document.getElementById('transitionError').classList.add('hidden');
+    document.getElementById('transitionSuccess').classList.add('hidden');
+}
+
 // ── Material info ─────────────────────────────────────────────────────────────
 
 async function loadMaterialInfo(e) {
@@ -791,4 +1050,3 @@ function clearMessages() {
     document.getElementById('errorMessage').classList.add('hidden');
     document.getElementById('successMessage').classList.add('hidden');
 }
-
