@@ -506,3 +506,78 @@ tbody tr:hover { background: var(--indigo-lt); }
 }
 
 #diffusionSheetTable tbody tr:hover { background: var(--indigo-lt); }
+
+/* Card Container Layout */
+.chart-card {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: #ffffff;
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.chart-body {
+    position: relative;
+    width: 100%;
+    height: 400px; /* Default height when not in fullscreen */
+    flex: 1;
+}
+
+.chart-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-chart-action {
+    background: transparent;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.btn-chart-action:hover {
+    background-color: #f0f0f0;
+}
+
+/* ── FULLSCREEN OVERRIDES ────────────────────────────────────────────────── */
+/* Ensure the parent card grows to full screen size */
+.chart-card:fullscreen,
+.chart-card.is-fullscreen {
+    width: 100vw !important;
+    height: 100vh !important;
+    padding: 24px !important;
+    background-color: #ffffff !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box;
+}
+
+/* Flex child to hold the chart area */
+.chart-body {
+    position: relative;
+    width: 100%;
+    height: 400px; /* Standard view height */
+    flex: 1;
+}
+
+/* Expand chart container to fill full height in fullscreen mode */
+.chart-card:fullscreen .chart-body,
+.chart-card.is-fullscreen .chart-body {
+    height: calc(100vh - 80px) !important; /* Subtract header padding */
+}
+
+/* Force canvas to scale properly inside Chart.js maintainAspectRatio: false */
+.chart-card:fullscreen canvas,
+.chart-card.is-fullscreen canvas {
+    max-height: none !important;
+    height: 100% !important;
+    width: 100% !important;
+}

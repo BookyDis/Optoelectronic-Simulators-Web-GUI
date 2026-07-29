@@ -354,6 +354,7 @@ def transition_sweep():
         traceback.print_exc()
         return jsonify({"status":"error","message":str(e)}), 500
 
+
 # ── /api/material-info ────────────────────────────────────────────────────────
 @app.route('/api/material-info', methods=['GET'])
 def material_info():

@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Optoelectronic Quantum Well Simulator</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -14,10 +17,10 @@
     <!-- ── Sticky sidebar ── -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <button onclick="show('SimulatorquantumWell')">QW Simulator</button>
-            <button onclick="show('Simulatortransition')">Transition Calculator</button>
-            <h1>QW Simulator</h1>
-            <p>FDM &amp; TMM Solver</p>
+            <button onclick="document.getElementById('sidebarTitle'); show('SimulatorquantumWell')">QW
+                Simulator</button>
+            <button onclick="document.getElementById('sidebarTitle'); show('Simulatortransition')">Transition
+                Calculator</button>
         </div>
 
         <form id="simulatorForm" class="sidebar-form" novalidate>
@@ -52,7 +55,6 @@
                     <option value="14kp">Ekenberg</option>
                 </select>
             </div>
-
 
             <!-- fields for heterostructure sequence-->
             <div class="form-group">
@@ -89,7 +91,9 @@
 
                 <button type="button" onclick="addRow()">+ Add Layer</button>
             </div>
+
             <!-- field for Sweep K -->
+            <!-- Sweep K checkbox (transition only, sits ABOVE electric field) -->
             <div class="form-group hidden" id="sweepKGroup">
                 <label class="sweep-toggle" id="sweepKToggleLabel" for="sweepKCheckbox">
                     <input type="checkbox" id="sweepKCheckbox" value="sweepK">
@@ -102,6 +106,7 @@
                 <label for="electric_field">Electric Field (kV/cm)</label>
                 <input type="number" id="electric_field" value="0.0" step="0.1" min="0">
             </div>
+
             <!-- fields for electric field sweep (K start / end / step) -->
             <div class="form-group hidden" id="electricFieldSweepGroup">
                 <label>Electric Field Sweep (kV/cm)</label>
@@ -121,6 +126,7 @@
                     </div>
                 </div>
             </div>
+
             <!-- field for grid spacing -->
             <div class="form-group">
                 <label for="grid_spacing">Grid Spacing dz (Å)</label>
@@ -131,7 +137,22 @@
                 <label for="num_states">Target States</label>
                 <input type="number" id="num_states" value="4" step="1" min="1" max="20">
             </div>
-            <!-- calculation submit button (Quantum Well Simulator only) -->
+            <!-- Energy Level Difference Card (transition only, sits JUST BEFORE execute buttons) -->
+            <div class="card sidebar-card hidden" id="energyLevelDiffCard">
+                <h4 class="card-subtitle">Energy Level Difference</h4>
+                <span class="help-text" style="margin-bottom:8px">Select two levels to compare.</span>
+                <div class="form-row-2">
+                    <div class="form-group" style="margin-bottom:0">
+                        <label for="state_i">Level i</label>
+                        <input type="number" id="state_i" value="1" step="1" min="1" max="20">
+                    </div>
+                    <div class="form-group" style="margin-bottom:0">
+                        <label for="state_j">Level j</label>
+                        <input type="number" id="state_j" value="2" step="1" min="1" max="20">
+                    </div>
+                </div>
+            </div>
+            <!-- Submit buttons area placed identically for both views -->
             <div id="qwSubmitGroup">
                 <button type="submit" id="submitBtn" class="btn-primary">
                     Execute Calculation
@@ -139,6 +160,23 @@
                 <div class="spinner-row">
                     <span id="loadingSpinner" class="spinner hidden"></span>
                     <span id="loadingLabel" class="loading-label hidden">Running…</span>
+                </div>
+            </div>
+
+            <div id="transitionSubmitGroup" class="hidden">
+                <div id="transitionSingleControls">
+                    <button type="button" id="runTransitionBtn" class="btn-primary">Execute Calculation</button>
+                    <div class="spinner-row">
+                        <span id="transitionSpinner" class="spinner hidden"></span>
+                        <span class="loading-label hidden" id="transitionLoadingLabel">Running…</span>
+                    </div>
+                </div>
+                <div id="transitionSweepControls" class="hidden">
+                    <button type="button" id="runTransitionSweepBtn" class="btn-primary">Run K Sweep</button>
+                    <div class="spinner-row">
+                        <span id="transitionSweepSpinner" class="spinner hidden"></span>
+                        <span class="loading-label hidden" id="transitionSweepLoadingLabel">Sweeping…</span>
+                    </div>
                 </div>
             </div>
 
@@ -157,7 +195,6 @@
             </div>
         </div>
     </aside>
-    <section></section>
 
     <!-- ── Results column ── -->
     <main class="results-main" id="resultsMain">
@@ -190,52 +227,84 @@
             <!-- ── Charts ── -->
             <section id="chartsSection" class="hidden">
 
-                <div class="card chart-card">
+                <!-- Bandstructure profile -->
+                <div class="card chart-card" id="potentialChartCard">
                     <div class="chart-header">
                         <h3 class="card-title">Bandstructure Profile</h3>
+                        <button class="btn-chart-action" onclick="resetPotentialChartZoom()" title="Reset View">🔍
+                            Reset</button>
+                        <button class="btn-chart-action" onclick="toggleFullScreen(this.closest('.chart-card').id)"
+                            title="Full Screen">⛶ Fullscreen</button>
                         <button class="btn-download" onclick="downloadChart('potentialChart','bandstructure')">↓
                             PNG</button>
                     </div>
-                    <canvas id="potentialChart"></canvas>
+                    <div class="chart-body">
+                        <canvas id="potentialChart"></canvas>
+                    </div>
                 </div>
-
-                <div class="card chart-card">
+                <!-- Wave function -->
+                <div class="card chart-card" id="wavefunctionChartCard">
                     <div class="chart-header">
                         <h3 class="card-title">Wavefunctions</h3>
+                        <button class="btn-chart-action" onclick="resetChartZoom(this)" title="Reset View">🔍
+                            Reset</button>
+                        <button class="btn-chart-action" onclick="toggleFullScreen(this.closest('.chart-card').id)"
+                            title="Full Screen">⛶ Fullscreen</button>
                         <button class="btn-download" onclick="downloadChart('wavefunctionChart','wavefunctions')">↓
                             PNG</button>
                     </div>
-                    <canvas id="wavefunctionChart"></canvas>
+                    <div class="chart-body">
+                        <canvas id="wavefunctionChart"></canvas>
+                    </div>
                 </div>
-
-                <div class="card chart-card">
+                <!-- Bound State Energies -->
+                <div class="card chart-card" id="boundStateChartCard">
                     <div class="chart-header">
                         <h3 class="card-title">Bound State Energies</h3>
+                        <button class="btn-chart-action" onclick="resetChartZoom(this)" title="Reset View">🔍
+                            Reset</button>
+                        <button class="btn-chart-action" onclick="toggleFullScreen(this.closest('.chart-card').id)"
+                            title="Full Screen">⛶ Fullscreen</button>
                         <button class="btn-download" onclick="downloadChart('boundStateEnergiesChart','bound_states')">↓
                             PNG</button>
                     </div>
-                    <canvas id="boundStateEnergiesChart"></canvas>
+                    <div class="chart-body">
+                        <canvas id="boundStateEnergiesChart"></canvas>
+                    </div>
                 </div>
 
-                <div class="card chart-card">
+                <!-- Energy Differences -->
+                <div class="card chart-card" id="energyDifferencesChartCard">
                     <div class="chart-header">
                         <h3 class="card-title">Energy Differences</h3>
+                        <button class="btn-chart-action" onclick="resetChartZoom(this)" title="Reset View">🔍
+                            Reset</button>
+                        <button class="btn-chart-action" onclick="toggleFullScreen(this.closest('.chart-card').id)"
+                            title="Full Screen">⛶ Fullscreen</button>
                         <button class="btn-download"
                             onclick="downloadChart('energyDifferencesChart','energy_differences')">↓ PNG</button>
                     </div>
-                    <canvas id="energyDifferencesChart"></canvas>
+                    <div class="chart-body">
+                        <canvas id="energyDifferencesChart"></canvas>
+                    </div>
                 </div>
 
-                <div class="card chart-card">
+                <!-- Two QCL Periods -->
+                <div class="card chart-card" id="qclPeriodsChartCard">
                     <div class="chart-header">
                         <h3 class="card-title">Two QCL Periods</h3>
+                        <button class="btn-chart-action" onclick="resetChartZoom(this)" title="Reset View">🔍
+                            Reset</button>
+                        <button class="btn-chart-action" onclick="toggleFullScreen(this.closest('.chart-card').id)"
+                            title="Full Screen">⛶ Fullscreen</button>
                         <button class="btn-download" onclick="downloadChart('qclPeriodsChart','qcl_periods')">↓
                             PNG</button>
                     </div>
-                    <canvas id="qclPeriodsChart"></canvas>
+                    <div class="chart-body">
+                        <canvas id="qclPeriodsChart"></canvas>
+                    </div>
                 </div>
 
-                <!-- ── Absorption panel ── -->
                 <div class="card" id="absorptionSection">
                     <h3 class="card-title">Absorption / Gain Spectrum</h3>
 
@@ -246,16 +315,15 @@
                             <div class="form-group">
                                 <label>Sheet Densities N<sub>i</sub> (m⁻²)</label>
                                 <span class="help-text">One per line: &lt;state&gt; &lt;density&gt;</span>
-                                <!-- FIXED: each pair on its own line so JS split('\n') works -->
-                                <textarea id="absorptionPopulations" rows="4" placeholder="1 5e14&#10;2 1e14">1 5e14
-2 1e14</textarea>
+                                <textarea id="absorptionPopulations" rows="4"
+                                    placeholder="1 5e14&#10;2 1e14">1 5e14 2 1e14</textarea>
                             </div>
 
                             <div class="form-group">
                                 <label>Linewidths Γ<sub>ij</sub> (meV FWHM)</label>
                                 <span class="help-text">One per line: &lt;i&gt; &lt;j&gt; &lt;meV&gt;</span>
-                                <textarea id="absorptionLinewidths" rows="4" placeholder="1 2 10&#10;1 3 15">1 2 10
-1 3 15</textarea>
+                                <textarea id="absorptionLinewidths" rows="4"
+                                    placeholder="1 2 10&#10;1 3 15">1 2 10 1 3 15</textarea>
                             </div>
 
                             <div class="form-group">
@@ -270,37 +338,50 @@
                         <span id="absorptionSpinner" class="spinner hidden"
                             style="margin-left:10px;vertical-align:middle"></span>
 
-                        <div id="absorptionError" class="msg-box error   hidden" style="margin-top:12px"></div>
+                        <div id="absorptionError" class="msg-box error hidden" style="margin-top:12px"></div>
                         <div id="absorptionSuccess" class="msg-box success hidden" style="margin-top:12px"></div>
                     </div>
+                </div>
 
-                    <div class="chart-header" style="margin-top:20px">
-                        <span></span>
-                        <button class="btn-download" onclick="downloadChart('absorptionChart','absorption_spectrum')">↓
-                            PNG</button>
-                    </div>
-                    <canvas id="absorptionChart"></canvas>
-
-                    <div id="transitionTableSection" class="hidden" style="margin-top:20px">
-                        <h4 class="card-subtitle">Transition Summary</h4>
-                        <div class="table-scroll">
-                            <table id="transitionTable">
-                                <thead>
-                                    <tr>
-                                        <th>Transition</th>
-                                        <th>E<sub>ij</sub> (meV)</th>
-                                        <th>f<sub>ij</sub></th>
-                                        <th>|d<sub>ij</sub>| (nm)</th>
-                                        <th>Γ (meV)</th>
-                                        <th>ΔN (m⁻²)</th>
-                                        <th>Peak α (cm⁻¹)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="transitionTableBody"></tbody>
-                            </table>
+                <!-- Isolated Chart Card -->
+                <div class="card chart-card" id="absorptionChartCard" style="margin-top:20px">
+                    <div class="chart-header">
+                        <h3 class="card-title" style="margin:0">Absorption / Gain Chart</h3>
+                        <div>
+                            <button class="btn-chart-action" onclick="resetChartZoom(this)" title="Reset View">🔍
+                                Reset</button>
+                            <button class="btn-chart-action" onclick="toggleFullScreen('absorptionChartCard')"
+                                title="Full Screen">⛶ Fullscreen</button>
+                            <button class="btn-download"
+                                onclick="downloadChart('absorptionChart','absorption_spectrum')">↓ PNG</button>
                         </div>
                     </div>
+                    <div class="chart-body">
+                        <canvas id="absorptionChart"></canvas>
+                    </div>
                 </div>
+
+                <!-- Isolated Transition Summary Table Card -->
+                <div class="card hidden" id="transitionTableSection" style="margin-top:20px">
+                    <h4 class="card-subtitle">Transition Summary</h4>
+                    <div class="table-scroll">
+                        <table id="transitionTable">
+                            <thead>
+                                <tr>
+                                    <th>Transition</th>
+                                    <th>E<sub>ij</sub> (meV)</th>
+                                    <th>f<sub>ij</sub></th>
+                                    <th>|d<sub>ij</sub>| (nm)</th>
+                                    <th>Γ (meV)</th>
+                                    <th>ΔN (m⁻²)</th>
+                                    <th>Peak α (cm⁻¹)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transitionTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
 
                 <!-- ── Diffusion panel ── -->
                 <div class="card" id="DiffusionModel">
@@ -315,15 +396,15 @@
                             <div class="form-group">
                                 <label>Transport parameters</label>
                                 <span class="help-text">One per line: &lt;state&gt; &lt;D m²/s&gt; &lt;τ s&gt;</span>
-                                <textarea id="diffTransport" rows="4" style="font-family:monospace">1 1.0e-3 1.0e-12
-2 8.0e-4 5.0e-13</textarea>
+                                <textarea id="diffTransport" rows="4"
+                                    style="font-family:monospace">1 1.0e-3 1.0e-12&#10;2 8.0e-4 5.0e-13</textarea>
                             </div>
 
                             <div class="form-group">
                                 <label>Generation rate G<sub>i</sub> (m⁻³ s⁻¹)</label>
                                 <span class="help-text">One per line: &lt;state&gt; &lt;G&gt;</span>
-                                <textarea id="diffGeneration" rows="4" style="font-family:monospace">1 1.0e24
-2 0.0</textarea>
+                                <textarea id="diffGeneration" rows="4"
+                                    style="font-family:monospace">1 1.0e24&#10;2 0.0</textarea>
                             </div>
                         </div>
 
@@ -332,31 +413,43 @@
                             <span id="diffusionSpinner" class="spinner hidden"></span>
                         </div>
 
-                        <div id="diffusionError" class="msg-box error   hidden" style="margin-top:12px"></div>
+                        <div id="diffusionError" class="msg-box error hidden" style="margin-top:12px"></div>
                         <div id="diffusionSuccess" class="msg-box success hidden" style="margin-top:12px"></div>
                     </div>
+                </div>
 
-                    <div class="chart-header" style="margin-top:20px">
-                        <span></span>
-                        <button class="btn-download" onclick="downloadChart('diffusionChart','diffusion_profile')">↓
-                            PNG</button>
-                    </div>
-                    <canvas id="diffusionChart"></canvas>
-
-                    <div id="diffusionTableSection" class="hidden" style="margin-top:20px">
-                        <h4 class="card-subtitle">Integrated Sheet Densities</h4>
-                        <div class="table-scroll">
-                            <table id="diffusionSheetTable">
-                                <thead>
-                                    <tr>
-                                        <th>Subband</th>
-                                        <th>Sheet density (m⁻²)</th>
-                                        <th>Peak N (m⁻³)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="diffusionTableBody"></tbody>
-                            </table>
+                <!-- Isolated Chart Card -->
+                <div class="card chart-card" id="diffusionChartCard" style="margin-top:20px">
+                    <div class="chart-header">
+                        <h3 class="card-title" style="margin:0">Diffusion Profile</h3>
+                        <div>
+                            <button class="btn-chart-action" onclick="resetChartZoom(this)" title="Reset View">🔍
+                                Reset</button>
+                            <button class="btn-chart-action" onclick="toggleFullScreen('diffusionChartCard')"
+                                title="Full Screen">⛶ Fullscreen</button>
+                            <button class="btn-download" onclick="downloadChart('diffusionChart','diffusion_profile')">↓
+                                PNG</button>
                         </div>
+                    </div>
+                    <div class="chart-body">
+                        <canvas id="diffusionChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Isolated Integrated Sheet Densities Table Card -->
+                <div class="card hidden" id="diffusionTableSection" style="margin-top:20px">
+                    <h4 class="card-subtitle">Integrated Sheet Densities</h4>
+                    <div class="table-scroll">
+                        <table id="diffusionSheetTable">
+                            <thead>
+                                <tr>
+                                    <th>Subband</th>
+                                    <th>Sheet density (m⁻²)</th>
+                                    <th>Peak N (m⁻³)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="diffusionTableBody"></tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -395,112 +488,89 @@
                             <span id="segregationSpinner" class="spinner hidden"></span>
                         </div>
 
-                        <div id="segregationError" class="msg-box error   hidden" style="margin-top:12px"></div>
+                        <div id="segregationError" class="msg-box error hidden" style="margin-top:12px"></div>
                         <div id="segregationSuccess" class="msg-box success hidden" style="margin-top:12px"></div>
                     </div>
-
-                    <div class="chart-header" style="margin-top:20px">
-                        <span></span>
-                        <button class="btn-download" onclick="downloadChart('segregationChart','segregation_profile')">↓
-                            PNG</button>
-                    </div>
-                    <canvas id="segregationChart"></canvas>
                 </div>
 
-            </section>
-        </div>
-
-        <!-- section for Transition Calculator -->
-        <div id="Simulatortransition" class="divSimulator" style="display:none">
-            <header class="page-header">
-                <h2>Transition Calculator</h2>
-                <p>Energy difference, dipole moment &amp; oscillator strength between two subbands</p>
-            </header>
-
-            <div id="transitionError" class="msg-box error   hidden"></div>
-            <div id="transitionSuccess" class="msg-box success hidden"></div>
-
-            <section class="card">
-                <h3 class="card-title">Energy Level Difference</h3>
-                <p class="help-text" style="margin-bottom:10px">
-                    Choose two energy levels to compare — the transition energy, dipole moment,
-                    and oscillator strength are computed between them.
-                </p>
-                <div class="calc-inputs">
-                    <div class="input-grid-3">
-                        <div class="form-group" style="margin-bottom:0">
-                            <label for="state_i">Energy Level i</label>
-                            <input type="number" id="state_i" value="1" step="1" min="1" max="20">
-                        </div>
-                        <div class="form-group" style="margin-bottom:0">
-                            <label for="state_j">Energy Level j</label>
-                            <input type="number" id="state_j" value="2" step="1" min="1" max="20">
+                <!-- Isolated Chart Card -->
+                <div class="card chart-card" id="segregationChartCard" style="margin-top:20px">
+                    <div class="chart-header">
+                        <h3 class="card-title" style="margin:0">Segregation Profile</h3>
+                        <div>
+                            <button class="btn-chart-action" onclick="resetChartZoom(this)" title="Reset View">🔍
+                                Reset</button>
+                            <button class="btn-chart-action" onclick="toggleFullScreen('segregationChartCard')"
+                                title="Full Screen">⛶ Fullscreen</button>
+                            <button class="btn-download"
+                                onclick="downloadChart('segregationChart','segregation_profile')">↓ PNG</button>
                         </div>
                     </div>
-                </div>
-
-                <!-- Single-point mode (Sweep K unchecked) -->
-                <div id="transitionSingleControls">
-                    <button type="button" id="runTransitionBtn" class="btn-primary">Compute Transition</button>
-                    <div class="spinner-row">
-                        <span id="transitionSpinner" class="spinner hidden"></span>
-                        <span class="loading-label hidden" id="transitionLoadingLabel">Running…</span>
+                    <div class="chart-body">
+                        <canvas id="segregationChart"></canvas>
                     </div>
                 </div>
 
-                <!-- Sweep mode (Sweep K checked) -->
-                <div id="transitionSweepControls" class="hidden">
-                    <button type="button" id="runTransitionSweepBtn" class="btn-primary">Run K Sweep</button>
-                    <div class="spinner-row">
-                        <span id="transitionSweepSpinner" class="spinner hidden"></span>
-                        <span class="loading-label hidden" id="transitionSweepLoadingLabel">Sweeping…</span>
-                    </div>
-                </div>
-            </section>
+                <!-- section for Transition Calculator -->
+                <div id="Simulatortransition" class="divSimulator" style="display:none">
+                    <header class="page-header">
+                        <h2>Transition Calculator</h2>
+                        <p>Energy difference, dipole moment &amp; oscillator strength between two subbands</p>
+                    </header>
 
-            <!-- Single-point result -->
-            <section class="card hidden" id="transitionResultCard">
-                <h3 class="card-title">Transition Result</h3>
-                <div class="mat-grid">
-                    <span class="mat-label">Transition</span> <span class="mat-val" id="tr-pair">--</span>
-                    <span class="mat-label">Energy difference E<sub>ij</sub></span> <span class="mat-val"
-                        id="tr-eij">--</span>
-                    <span class="mat-label">Dipole moment |d<sub>ij</sub>|</span> <span class="mat-val"
-                        id="tr-dij">--</span>
-                    <span class="mat-label">Oscillator strength f<sub>ij</sub></span> <span class="mat-val"
-                        id="tr-fij">--</span>
-                    <span class="mat-label">Electric field</span> <span class="mat-val" id="tr-field">--</span>
-                </div>
-            </section>
+                    <div id="transitionError" class="msg-box error   hidden"></div>
+                    <div id="transitionSuccess" class="msg-box success hidden"></div>
 
-            <!-- Sweep results -->
-            <section id="transitionSweepCharts" class="hidden" style="display:flex;flex-direction:column;gap:22px">
-                <div class="card chart-card">
-                    <div class="chart-header">
-                        <h3 class="card-title">Energy Difference vs. Electric Field</h3>
-                        <button class="btn-download"
-                            onclick="downloadChart('transitionEChart','transition_energy_vs_K')">↓ PNG</button>
-                    </div>
-                    <canvas id="transitionEChart"></canvas>
+                    <!-- Single-point result -->
+                    <section class="card hidden" id="transitionResultCard">
+                        <h3 class="card-title">Transition Result</h3>
+                        <div class="mat-grid">
+                            <span class="mat-label">Transition</span> <span class="mat-val" id="tr-pair">--</span>
+                            <span class="mat-label">Energy difference E<sub>ij</sub></span> <span class="mat-val"
+                                id="tr-eij">--</span>
+                            <span class="mat-label">Dipole moment |d<sub>ij</sub>|</span> <span class="mat-val"
+                                id="tr-dij">--</span>
+                            <span class="mat-label">Oscillator strength f<sub>ij</sub></span> <span class="mat-val"
+                                id="tr-fij">--</span>
+                            <span class="mat-label">Electric field</span> <span class="mat-val" id="tr-field">--</span>
+                        </div>
+                    </section>
+
+                    <!-- Sweep results -->
+                    <section id="transitionSweepCharts" class="hidden"
+                        style="display:flex;flex-direction:column;gap:22px">
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3 class="card-title">Energy Difference vs. Electric Field</h3>
+                                <button class="btn-chart-action" onclick="resetChartZoom(this)" title="Reset View">🔍
+                                    Reset</button>
+                                <button class="btn-chart-action"
+                                    onclick="toggleFullScreen(this.closest('.chart-card').id)" title="Full Screen">⛶
+                                    Fullscreen</button>
+                                <button class="btn-download"
+                                    onclick="downloadChart('transitionEChart','transition_energy_vs_K')">↓ PNG</button>
+                            </div>
+                            <canvas id="transitionEChart"></canvas>
+                        </div>
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3 class="card-title">Dipole Moment vs. Electric Field</h3>
+                                <button class="btn-download"
+                                    onclick="downloadChart('transitionDChart','transition_dipole_vs_K')">↓ PNG</button>
+                            </div>
+                            <canvas id="transitionDChart"></canvas>
+                        </div>
+                        <div class="card chart-card">
+                            <div class="chart-header">
+                                <h3 class="card-title">Oscillator Strength vs. Electric Field</h3>
+                                <button class="btn-download"
+                                    onclick="downloadChart('transitionFChart','transition_oscstrength_vs_K')">↓
+                                    PNG</button>
+                            </div>
+                            <canvas id="transitionFChart"></canvas>
+                        </div>
+                    </section>
                 </div>
-                <div class="card chart-card">
-                    <div class="chart-header">
-                        <h3 class="card-title">Dipole Moment vs. Electric Field</h3>
-                        <button class="btn-download"
-                            onclick="downloadChart('transitionDChart','transition_dipole_vs_K')">↓ PNG</button>
-                    </div>
-                    <canvas id="transitionDChart"></canvas>
-                </div>
-                <div class="card chart-card">
-                    <div class="chart-header">
-                        <h3 class="card-title">Oscillator Strength vs. Electric Field</h3>
-                        <button class="btn-download"
-                            onclick="downloadChart('transitionFChart','transition_oscstrength_vs_K')">↓ PNG</button>
-                    </div>
-                    <canvas id="transitionFChart"></canvas>
-                </div>
-            </section>
-        </div>
     </main>
 
     <script src="app.js"></script>

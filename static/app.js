@@ -32,6 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const transitionSweepBtn = document.getElementById('runTransitionSweepBtn');
     if (transitionSweepBtn) transitionSweepBtn.addEventListener('click', runTransitionSweep);
 
+
     // Inside DOMContentLoaded in app.js:
     document.getElementById('k_start').disabled = true;
     document.getElementById('k_end').disabled = true;
@@ -40,32 +41,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // function for switching between Quantum Well simulator and Transition calculator  ────────────────────────────────────────────────────
 function show(elementID) {
-    // find the requested page and alert if it's not found
     const ele = document.getElementById(elementID);
     if (!ele) {
         alert("no such element");
         return;
     }
 
-    // get all pages, loop through them and hide them
     const pages = document.getElementsByClassName('divSimulator');
     for (let i = 0; i < pages.length; i++) {
         pages[i].style.display = 'none';
     }
 
-    // then show the requested page
     ele.style.display = 'block';
 
-    // --- Toggle page-specific sidebar controls ---
+    // --- Toggle page-specific controls ---
     const sweepKGroup = document.getElementById('sweepKGroup');
+    const energyLevelDiffCard = document.getElementById('energyLevelDiffCard');
     const qwSubmitGroup = document.getElementById('qwSubmitGroup');
+    const transitionSubmitGroup = document.getElementById('transitionSubmitGroup');
     const isTransition = elementID === 'Simulatortransition';
 
     if (sweepKGroup) sweepKGroup.classList.toggle('hidden', !isTransition);
+    if (energyLevelDiffCard) energyLevelDiffCard.classList.toggle('hidden', !isTransition);
     if (qwSubmitGroup) qwSubmitGroup.classList.toggle('hidden', isTransition);
+    if (transitionSubmitGroup) transitionSubmitGroup.classList.toggle('hidden', !isTransition);
 
-    // Leaving the transition page: reset sweep-K mode back to the single
-    // electric-field field so the QW simulator behaves normally.
     if (!isTransition) {
         const sweepKCheckbox = document.getElementById('sweepKCheckbox');
         if (sweepKCheckbox && sweepKCheckbox.checked) {
@@ -258,9 +258,12 @@ function displayEnergyLevels(energies) {
 
 // ── Bandstructure + |ψ|² overlay ─────────────────────────────────────────────
 
+// ── Bandstructure + |ψ|² overlay ─────────────────────────────────────────────
 function displayPotentialChart(zGrid, potential, wavefunctions, energies) {
     const ctx = document.getElementById('potentialChart').getContext('2d');
-    if (potentialChart) potentialChart.destroy();
+    if (typeof potentialChart !== 'undefined' && potentialChart) {
+        potentialChart.destroy();
+    }
 
     const wfColors = ['rgb(54,162,235)', 'rgb(255,99,132)', 'rgb(75,192,192)', 'rgb(255,206,86)', 'rgb(153,102,255)'];
     const WF_SCALE = 1000;
@@ -283,10 +286,16 @@ function displayPotentialChart(zGrid, potential, wavefunctions, energies) {
     });
 
     potentialChart = new Chart(ctx, {
-        type: 'line', data: { datasets },
+        type: 'line',
+        data: { datasets },
         options: {
             responsive: true,
-            plugins: { legend: { display: true }, title: { display: true, text: 'Bandstructure Potential Profile' } },
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true },
+                title: { display: true, text: 'Bandstructure Potential Profile' },
+                zoom: getZoomOptions('xy')
+            },
             scales: {
                 x: { type: 'linear', title: { display: true, text: 'Position z (Å)' } },
                 y: { title: { display: true, text: 'Energy (meV)' } },
@@ -316,7 +325,12 @@ function displayWavefunctionChart(zGrid, wavefunctions, energies) {
         data: { labels: zGrid.map(z => z.toFixed(2)), datasets },
         options: {
             responsive: true,
-            plugins: { legend: { display: true }, title: { display: true, text: 'Quantum Well Wavefunctions' } },
+            maintainAspectRatio: false,
+            plugins: { 
+            legend: { display: true }, 
+            title: { display: true, text: 'Quantum Well Wavefunctions' } ,
+            zoom: getZoomOptions('xy')
+        },
             scales: {
                 x: { title: { display: true, text: 'Position z (Å)' } },
                 y: { title: { display: true, text: 'Wavefunction Amplitude' } },
@@ -338,22 +352,27 @@ function displayBoundStateEnergies(energies) {
     });
 
     boundStateChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            datasets: [
-                { data: stemPoints, borderColor: 'rgb(70,90,230)', borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, spanGaps: false },
-                { type: 'scatter', data: markerPoints, pointStyle: 'circle', pointRadius: 8, pointBorderColor: 'rgb(70,90,230)', pointBackgroundColor: 'rgba(0,0,0,0)', pointBorderWidth: 2 },
-            ]
+    type: 'line',
+    data: {
+        datasets: [
+            { data: stemPoints, borderColor: 'rgb(70,90,230)', borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, spanGaps: false },
+            { type: 'scatter', data: markerPoints, pointStyle: 'circle', pointRadius: 8, pointBorderColor: 'rgb(70,90,230)', pointBackgroundColor: 'rgba(0,0,0,0)', pointBorderWidth: 2 },
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false, 
+        plugins: { 
+            legend: { display: false }, 
+            title: { display: true, text: 'Bound State Energies' },
+            zoom: getZoomOptions('xy') 
         },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: false }, title: { display: true, text: 'Bound State Energies' } },
-            scales: {
-                x: { type: 'linear', title: { display: true, text: 'State #' } },
-                y: { title: { display: true, text: 'E (meV)' }, beginAtZero: true },
-            },
+        scales: {
+            x: { type: 'linear', title: { display: true, text: 'State #' } },
+            y: { title: { display: true, text: 'E (meV)' }, beginAtZero: true },
         },
-    });
+    },
+});
 }
 
 // ── Energy differences (THz) ──────────────────────────────────────────────────
@@ -386,7 +405,10 @@ function displayEnergyDifferences(energies) {
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: false }, title: { display: true, text: 'Energy Differences' } },
+            plugins: { legend: { display: false }, title: { display: true, text: 'Energy Differences' }, 
+            maintainAspectRatio: false, 
+            zoom: getZoomOptions('xy')
+        },
             scales: {
                 x: {
                     type: 'linear', title: { display: true, text: 'Transition' },
@@ -433,7 +455,11 @@ function displayTwoQCLPeriods(zGrid, potential, wavefunctions, energies) {
         type: 'line', data: { datasets },
         options: {
             responsive: true,
-            plugins: { legend: { display: true }, title: { display: true, text: 'Two QCL Periods' } },
+            plugins: { legend: { display: true }, title: { display: true, text: 'Two QCL Periods' },
+            maintainAspectRatio: false, 
+            zoom: getZoomOptions('xy')
+        
+        },
             scales: {
                 x: { type: 'linear', title: { display: true, text: 'z (Å)' } },
                 y: { title: { display: true, text: 'V (meV)' } },
@@ -454,32 +480,37 @@ async function runAbsorption() {
     document.getElementById('absorptionSuccess').classList.add('hidden');
     setSpinnerActive('absorptionSpinner', true);
 
-    // Parse populations — each line must be "state density"
+    // 1. Robust token parsing for Populations (<state> <density>)
     const populations = {};
-    document.getElementById('absorptionPopulations').value
-        .trim().split('\n')
-        .forEach(line => {
-            const p = line.trim().split(/\s+/);
-            if (p.length === 2) populations[p[0]] = parseFloat(p[1]);
-        });
+    const popTokens = document.getElementById('absorptionPopulations').value.trim().split(/\s+/);
+    for (let i = 0; i + 1 < popTokens.length; i += 2) {
+        const state = parseInt(popTokens[i], 10);
+        const density = parseFloat(popTokens[i + 1]);
+        if (!isNaN(state) && !isNaN(density)) {
+            populations[state] = density;
+        }
+    }
 
-    // Parse linewidths — each line must be "i j meV"
+    // 2. Robust token parsing for Linewidths (<i> <j> <meV>)
     const linewidths = {};
-    document.getElementById('absorptionLinewidths').value
-        .trim().split('\n')
-        .forEach(line => {
-            const p = line.trim().split(/\s+/);
-            if (p.length === 3) linewidths[`${p[0]},${p[1]}`] = parseFloat(p[2]);
-        });
+    const lwTokens = document.getElementById('absorptionLinewidths').value.trim().split(/\s+/);
+    for (let i = 0; i + 2 < lwTokens.length; i += 3) {
+        const stateI = parseInt(lwTokens[i], 10);
+        const stateJ = parseInt(lwTokens[i + 1], 10);
+        const gamma = parseFloat(lwTokens[i + 2]);
+        if (!isNaN(stateI) && !isNaN(stateJ) && !isNaN(gamma)) {
+            linewidths[`${stateI},${stateJ}`] = gamma;
+        }
+    }
 
-    // Validate we got something
+    // Validate inputs
     if (Object.keys(populations).length === 0) {
-        showAbsorptionMsg('No valid populations found. Check format: one "state density" per line.', 'error');
+        showAbsorptionMsg('No valid populations found. Check format: e.g. "1 5e14" (state density).', 'error');
         setSpinnerActive('absorptionSpinner', false);
         return;
     }
     if (Object.keys(linewidths).length === 0) {
-        showAbsorptionMsg('No valid linewidths found. Check format: one "i j meV" per line.', 'error');
+        showAbsorptionMsg('No valid linewidths found. Check format: e.g. "1 2 10" (i j meV).', 'error');
         setSpinnerActive('absorptionSpinner', false);
         return;
     }
@@ -553,8 +584,10 @@ function renderAbsorptionChart(spectrum) {
             responsive: true,
             plugins: {
                 legend: { display: true },
+                maintainAspectRatio: false, 
+                zoom: getZoomOptions('xy'),
                 title: { display: true, text: 'Intersubband Absorption Coefficient' },
-                tooltip: { callbacks: { label: c => `α = ${c.parsed.y.toFixed(2)} cm⁻¹  @  ${c.parsed.x.toFixed(2)} meV` } },
+                tooltip: { callbacks: { label: c => `α = ${c.parsed.y.toFixed(2)} cm⁻¹  @  ${c.parsed.x.toFixed(2)} meV` } }
             },
             scales: {
                 x: { type: 'linear', title: { display: true, text: 'ħω (meV)' } },
@@ -670,7 +703,9 @@ function displayDiffusionChart(zGrid, spatialPops) {
         type: 'line', data: { datasets },
         options: {
             responsive: true,
-            plugins: { title: { display: true, text: 'Steady-State Carrier Density Profiles' } },
+            plugins: { title: { display: true, text: 'Steady-State Carrier Density Profiles' },
+            maintainAspectRatio: false, 
+            zoom: getZoomOptions('xy') },
             scales: {
                 x: { type: 'linear', title: { display: true, text: 'z (Å)' } },
                 y: { title: { display: true, text: 'N(z) (m⁻³)' } },
@@ -752,7 +787,10 @@ function displaySegregationChart(z, xNominal, xSmeared) {
         },
         options: {
             responsive: true,
-            plugins: { title: { display: true, text: 'Interface Segregation / Smearing' } },
+            plugins: { title: { display: true, text: 'Interface Segregation / Smearing' },
+            maintainAspectRatio: false, 
+            zoom: getZoomOptions('xy') 
+        },
             scales: {
                 x: { type: 'linear', title: { display: true, text: 'z (Å)' } },
                 y: { title: { display: true, text: 'Alloy fraction x' }, min: 0, max: 1 },
@@ -902,7 +940,9 @@ function displayTransitionSweepCharts(sweep, i, j) {
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: true }, title: { display: true, text: 'Transition Energy vs. Electric Field' } },
+            plugins: { legend: { display: true }, title: { display: true, text: 'Transition Energy vs. Electric Field' }, 
+            maintainAspectRatio: false, 
+            zoom: getZoomOptions('xy')},
             scales: {
                 x: { type: 'linear', title: { display: true, text: 'K (kV/cm)' } },
                 y: { title: { display: true, text: 'E_ij (meV)' } },
@@ -944,7 +984,9 @@ function displayTransitionSweepCharts(sweep, i, j) {
         },
         options: {
             responsive: true,
-            plugins: { legend: { display: true }, title: { display: true, text: 'Oscillator Strength vs. Electric Field' } },
+            plugins: { legend: { display: true }, title: { display: true, text: 'Oscillator Strength vs. Electric Field' },
+            maintainAspectRatio: false, 
+            zoom: getZoomOptions('xy') },
             scales: {
                 x: { type: 'linear', title: { display: true, text: 'K (kV/cm)' } },
                 y: { title: { display: true, text: 'f_ij' } },
@@ -1050,3 +1092,97 @@ function clearMessages() {
     document.getElementById('errorMessage').classList.add('hidden');
     document.getElementById('successMessage').classList.add('hidden');
 }
+
+document.getElementById('resetZoomBtn').addEventListener('click', () => {
+    if (potentialChart) {
+        potentialChart.resetZoom();
+    }
+});
+
+function toggleFullScreen(elementId) {
+    const card = document.getElementById(elementId);
+    if (!card) {
+        console.error(`Element with id "${elementId}" not found.`);
+        return;
+    }
+
+    if (!document.fullscreenElement) {
+        if (card.requestFullscreen) {
+            card.requestFullscreen();
+        } else if (card.webkitRequestFullscreen) { /* Safari */
+            card.webkitRequestFullscreen();
+        } else if (card.msRequestFullscreen) { /* IE11 */
+            card.msRequestFullscreen();
+        }
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+}
+
+/**
+ * 2. Modular Zoom Reset
+ * Finds the canvas within the button's parent card and resets its Chart.js zoom plugin state.
+ */
+function resetChartZoom(buttonElement) {
+    const card = buttonElement.closest('.chart-card');
+    if (!card) return;
+
+    const canvas = card.querySelector('canvas');
+    if (!canvas) return;
+
+    // Retrieve the active Chart instance attached to this canvas
+    const chartInstance = Chart.getChart(canvas);
+    if (chartInstance && typeof chartInstance.resetZoom === 'function') {
+        chartInstance.resetZoom();
+    }
+}
+
+/**
+ * 3. Modular Reusable Zoom Options Config
+ * Pass this into your Chart.js options.plugins.zoom block for instant zoom support.
+ */
+function getZoomOptions(mode = 'xy') {
+    return {
+        pan: {
+            enabled: true,
+            mode: mode,
+            threshold: 0
+        },
+        zoom: {
+            wheel: {
+                enabled: true
+            },
+            pinch: {
+                enabled: true
+            },
+            mode: mode
+        }
+    };
+}
+
+/**
+ * 4. Fullscreen State Sync & Automatic Chart Resizing
+ * Triggers Chart.js resize on ALL instances whenever native fullscreen toggles (e.g., ESC key press).
+ */
+document.addEventListener('fullscreenchange', () => {
+    const activeFullscreen = document.fullscreenElement;
+
+    // Remove active class from all cards
+    document.querySelectorAll('.chart-card').forEach(card => {
+        card.classList.remove('is-fullscreen');
+    });
+
+    // Add active class to current fullscreen element if it's a card
+    if (activeFullscreen && activeFullscreen.classList.contains('chart-card')) {
+        activeFullscreen.classList.add('is-fullscreen');
+    }
+
+    // Force all Chart.js instances on the page to recalculate container dimensions
+    setTimeout(() => {
+        Object.values(Chart.instances).forEach(chart => {
+            chart.resize();
+        });
+    }, 100);
+});
