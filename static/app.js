@@ -5,23 +5,15 @@ let wavefunctionChart = null;
 let boundStateChart = null;
 let energyDiffChart = null;
 let qclChart = null;
-let absorptionChart = null;
-let diffusionChart = null;
-let segregationChart = null;
-let transitionEChart = null;
-let transitionDChart = null;
-let transitionFChart = null;
+let structSweepEChart = null;
+let structSweepDChart = null;
+let structSweepFChart = null;
 let currentResults = null;
+let currentSweepParam = 'none'; // 'none' | 'width' | 'molar' — a structure sweep param is REQUIRED to run
 
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('simulatorForm').addEventListener('submit', handleSubmit);
     document.getElementById('material').addEventListener('change', loadMaterialInfo);
-
-    const diffBtn = document.getElementById('runDiffusionBtn');
-    if (diffBtn) diffBtn.addEventListener('click', runDiffusion);
-
-    const segBtn = document.getElementById('runSegregationBtn');
-    if (segBtn) segBtn.addEventListener('click', runSegregation);
 
     const sweepKCheckbox = document.getElementById('sweepKCheckbox');
     if (sweepKCheckbox) sweepKCheckbox.addEventListener('change', toggleSweepKMode);
@@ -29,8 +21,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const transitionBtn = document.getElementById('runTransitionBtn');
     if (transitionBtn) transitionBtn.addEventListener('click', runTransition);
 
-    const transitionSweepBtn = document.getElementById('runTransitionSweepBtn');
-    if (transitionSweepBtn) transitionSweepBtn.addEventListener('click', runTransitionSweep);
+    document.querySelectorAll('#sweepParamToggle .param-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => setSweepParamMode(btn.dataset.value));
+    });
+
+    const transitionStructureSweepBtn = document.getElementById('runTransitionStructureSweepBtn');
+    if (transitionStructureSweepBtn) transitionStructureSweepBtn.addEventListener('click', runTransitionStructureSweep);
 
 
     // Inside DOMContentLoaded in app.js:
@@ -57,22 +53,21 @@ function show(elementID) {
     // --- Toggle page-specific controls ---
     const sweepKGroup = document.getElementById('sweepKGroup');
     const energyLevelDiffCard = document.getElementById('energyLevelDiffCard');
+    const structureSweepCard = document.getElementById('structureSweepCard');
     const qwSubmitGroup = document.getElementById('qwSubmitGroup');
     const transitionSubmitGroup = document.getElementById('transitionSubmitGroup');
     const isTransition = elementID === 'Simulatortransition';
 
     if (sweepKGroup) sweepKGroup.classList.toggle('hidden', !isTransition);
     if (energyLevelDiffCard) energyLevelDiffCard.classList.toggle('hidden', !isTransition);
+    if (structureSweepCard) structureSweepCard.classList.toggle('hidden', !isTransition);
     if (qwSubmitGroup) qwSubmitGroup.classList.toggle('hidden', isTransition);
     if (transitionSubmitGroup) transitionSubmitGroup.classList.toggle('hidden', !isTransition);
 
-    if (!isTransition) {
-        const sweepKCheckbox = document.getElementById('sweepKCheckbox');
-        if (sweepKCheckbox && sweepKCheckbox.checked) {
-            sweepKCheckbox.checked = false;
-            toggleSweepKMode();
-        }
-    }
+    // --- Highlight the active page-switch pill ---
+    document.getElementById('qwPageBtn')?.classList.toggle('active', !isTransition);
+    document.getElementById('transitionPageBtn')?.classList.toggle('active', isTransition);
+
 }
 
 // ── Sweep-K toggle: swap electric field single input <-> K start/end/step ──
@@ -90,19 +85,221 @@ function toggleSweepKMode() {
     document.getElementById('k_start').disabled = !checked;
     document.getElementById('k_end').disabled = !checked;
     document.getElementById('k_step').disabled = !checked;
-
-    const singleControls = document.getElementById('transitionSingleControls');
-    const sweepControls = document.getElementById('transitionSweepControls');
-    if (singleControls) singleControls.classList.toggle('hidden', checked);
-    if (sweepControls) sweepControls.classList.toggle('hidden', !checked);
-
-    // Clear whichever result view no longer applies
-    const resultCard = document.getElementById('transitionResultCard');
-    const sweepCharts = document.getElementById('transitionSweepCharts');
-    if (checked && resultCard) resultCard.classList.add('hidden');
-    if (!checked && sweepCharts) sweepCharts.classList.add('hidden');
 }
 
+// ── Structure-parameter sweep mode (Sweep Well Width / Sweep Molar Content) ──
+const SWEEP_PARAM_PRESETS = {
+    width: { start: 50, end: 150, step: 10 },
+    molar: { start: 0.00, end: 0.50, step: 0.10 },
+};
+
+function setSweepParamMode(mode) {
+    currentSweepParam = mode;
+
+    document.querySelectorAll('#sweepParamToggle .param-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.value === mode);
+    });
+
+    const isSweeping = mode !== 'none';
+    const rangeGroup = document.getElementById('structureSweepRangeGroup');
+    const rangeLabel = document.getElementById('structureSweepRangeLabel');
+    const subLabel = document.getElementById('structureSweepSubLabel');
+
+    if (rangeGroup) rangeGroup.classList.toggle('hidden', !isSweeping);
+    if (rangeLabel) rangeLabel.textContent = mode === 'molar' ? 'Set ranges for height' : 'Set ranges for width';
+    if (subLabel) subLabel.textContent = mode === 'molar' ? 'Height:' : 'Width:';
+
+    if (isSweeping && SWEEP_PARAM_PRESETS[mode]) {
+        document.getElementById('sweepParamStart').value = SWEEP_PARAM_PRESETS[mode].start;
+        document.getElementById('sweepParamEnd').value = SWEEP_PARAM_PRESETS[mode].end;
+        document.getElementById('sweepParamStep').value = SWEEP_PARAM_PRESETS[mode].step;
+    }
+
+    
+    document.getElementById('transitionStructureSweepControls')?.classList.toggle('hidden', !isSweeping);
+    document.getElementById('transitionSingleControls')?.classList.toggle('hidden', isSweeping);
+
+    if (!isSweeping) {
+        document.getElementById('transitionStructureSweepCharts')?.classList.add('hidden');
+    }
+}
+
+async function runTransitionStructureSweep() {
+    clearTransitionMessages();
+
+    const state_i = parseInt(document.getElementById('state_i').value, 10);
+    const state_j = parseInt(document.getElementById('state_j').value, 10);
+    if (!state_i || !state_j || state_i === state_j) {
+        showTransitionMessage('Choose two different state indices for i and j.', 'error');
+        return;
+    }
+
+    const sweep_start = parseFloat(document.getElementById('sweepParamStart').value);
+    const sweep_end = parseFloat(document.getElementById('sweepParamEnd').value);
+    const sweep_step = parseFloat(document.getElementById('sweepParamStep').value);
+    if (isNaN(sweep_start) || isNaN(sweep_end) || isNaN(sweep_step) || sweep_step <= 0 || sweep_end < sweep_start) {
+        showTransitionMessage('Check the sweep range: End must be ≥ Start, and Step must be > 0.', 'error');
+        return;
+    }
+
+    // "Sweep K?" is an optional modifier: ticked -> re-run the structure
+    const sweepKCheckbox = document.getElementById('sweepKCheckbox');
+    const sweep_k = !!(sweepKCheckbox && sweepKCheckbox.checked);
+
+    const payload = {
+        ...getTransitionStructurePayload(),
+        state_i, state_j,
+        sweep_param: currentSweepParam,
+        sweep_start, sweep_end, sweep_step,
+        sweep_k,
+    };
+
+    if (sweep_k) {
+        const k_start = parseFloat(document.getElementById('k_start').value);
+        const k_end = parseFloat(document.getElementById('k_end').value);
+        const k_step = parseFloat(document.getElementById('k_step').value);
+        if (isNaN(k_start) || isNaN(k_end) || isNaN(k_step) || k_step <= 0 || k_end < k_start) {
+            showTransitionMessage('Check the K sweep range: K end must be ≥ K start, and K step must be > 0.', 'error');
+            return;
+        }
+        payload.k_start = k_start;
+        payload.k_end = k_end;
+        payload.k_step = k_step;
+    } else {
+        payload.electric_field = document.getElementById('electric_field').value;
+    }
+
+    setSpinnerActive('transitionStructureSweepSpinner', true);
+    document.getElementById('transitionStructureSweepLoadingLabel').classList.remove('hidden');
+    document.getElementById('runTransitionStructureSweepBtn').disabled = true;
+
+    try {
+        const response = await fetch('/api/transition-structure-sweep', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`Server error ${response.status}: ${text.slice(0, 200)}`);
+        }
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            displayTransitionStructureSweepCharts(data.series, data.state_i, data.state_j, data.sweep_param, data.sweep_k);
+            const nLines = data.series.length;
+            const nPoints = data.series.reduce((sum, s) => sum + s.x_vals.length, 0);
+            showTransitionMessage(
+                sweep_k
+                    ? `Sweep completed — ${nLines} K value(s), ${nPoints} points total.`
+                    : `Sweep completed — ${nPoints} points.`,
+                'success'
+            );
+        } else {
+            showTransitionMessage(data.message, 'error');
+        }
+    } catch (err) {
+        showTransitionMessage(`Error: ${err.message}`, 'error');
+        console.error('Structure sweep error:', err);
+    } finally {
+        setSpinnerActive('transitionStructureSweepSpinner', false);
+        document.getElementById('transitionStructureSweepLoadingLabel').classList.add('hidden');
+        document.getElementById('runTransitionStructureSweepBtn').disabled = false;
+    }
+}
+
+// Distinct colours so each K line is visually distinguishable when Sweep K
+// is on. Falls back to the first colour when there's just a single line.
+const SWEEP_LINE_COLORS = [
+    'rgb(102,126,234)', 'rgb(237,100,166)', 'rgb(56,178,172)', 'rgb(237,137,54)',
+    'rgb(72,187,120)', 'rgb(159,122,234)', 'rgb(245,101,101)', 'rgb(66,153,225)',
+    'rgb(214,158,46)', 'rgb(129,140,248)',
+];
+
+function displayTransitionStructureSweepCharts(series, i, j, sweepParam, sweepK) {
+    const xLabel = sweepParam === 'molar' ? 'Molar Content' : 'Width [Å]';
+    const xTitle = sweepParam === 'molar' ? 'Molar Content' : 'Well Width';
+
+    const eTitleEl = document.getElementById('structSweepEChartTitle');
+    const dTitleEl = document.getElementById('structSweepDChartTitle');
+    const fTitleEl = document.getElementById('structSweepFChartTitle');
+    if (eTitleEl) eTitleEl.textContent = `Energy difference vs ${xTitle}`;
+    if (dTitleEl) dTitleEl.textContent = `Dipole Moments vs ${xTitle}`;
+    if (fTitleEl) fTitleEl.textContent = `Oscillator Strength vs ${xTitle}`;
+
+    
+    const makeDatasets = (key) => series.map((s, idx) => ({
+        label: s.k_kVcm !== undefined ? `K = ${s.k_kVcm.toFixed(1)}` : 'Electric Field',
+        data: s.x_vals.map((x, pidx) => ({ x: x, y: Math.abs(s[key][pidx]) })),
+        borderColor: SWEEP_LINE_COLORS[idx % SWEEP_LINE_COLORS.length],
+        borderWidth: 2, 
+        pointRadius: 3, 
+        tension: 0, 
+        fill: false,
+    }));
+
+    const eCtx = document.getElementById('structSweepEChart').getContext('2d');
+    if (structSweepEChart) structSweepEChart.destroy();
+    structSweepEChart = new Chart(eCtx, {
+        type: 'line',
+        data: { datasets: makeDatasets('E_ij_meV') },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true },
+                title: { display: true, text: `Energy difference vs ${xTitle}` },
+                zoom: getZoomOptions('xy'),
+            },
+            scales: {
+                x: { type: 'linear', title: { display: true, text: xLabel } },
+                y: { title: { display: true, text: 'Energy [meV]' } },
+            },
+        },
+    });
+
+    const dCtx = document.getElementById('structSweepDChart').getContext('2d');
+    if (structSweepDChart) structSweepDChart.destroy();
+    structSweepDChart = new Chart(dCtx, {
+        type: 'line',
+        data: { datasets: makeDatasets('d_ij_nm') },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true },
+                title: { display: true, text: `Dipole Moments vs ${xTitle}` },
+                zoom: getZoomOptions('xy'),
+            },
+            scales: {
+                x: { type: 'linear', title: { display: true, text: xLabel } },
+                y: { title: { display: true, text: 'Dipole Moment [e nm]' } },
+            },
+        },
+    });
+
+    const fCtx = document.getElementById('structSweepFChart').getContext('2d');
+    if (structSweepFChart) structSweepFChart.destroy();
+    structSweepFChart = new Chart(fCtx, {
+        type: 'line',
+        data: { datasets: makeDatasets('f_ij') },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true },
+                title: { display: true, text: `Oscillator Strength vs ${xTitle}` },
+                zoom: getZoomOptions('xy'),
+            },
+            scales: {
+                x: { type: 'linear', title: { display: true, text: xLabel } },
+                y: { title: { display: true, text: 'Oscillator Strength' } },
+            },
+        },
+    });
+
+    document.getElementById('transitionStructureSweepCharts').classList.remove('hidden');
+}
 // Function to add a new empty row to the grid
 function addRow() {
     const tbody = document.getElementById('layerTableBody');
@@ -116,6 +313,7 @@ function addRow() {
 
     tbody.appendChild(row);
 }
+
 //  Heterostructure grid function helper ────────────────────────────────────────────────────
 
 // Function to remove a row
@@ -196,6 +394,7 @@ async function handleSubmit(e) {
         electric_field: document.getElementById('electric_field').value,
         grid_spacing: document.getElementById('grid_spacing').value,
         num_states: document.getElementById('num_states').value,
+        padding: document.getElementById('padding').value,
     };
 
     try {
@@ -255,8 +454,6 @@ function displayEnergyLevels(energies) {
         tbody.appendChild(row);
     });
 }
-
-// ── Bandstructure + |ψ|² overlay ─────────────────────────────────────────────
 
 // ── Bandstructure + |ψ|² overlay ─────────────────────────────────────────────
 function displayPotentialChart(zGrid, potential, wavefunctions, energies) {
@@ -468,134 +665,6 @@ function displayTwoQCLPeriods(zGrid, potential, wavefunctions, energies) {
     });
 }
 
-// ── Absorption spectrum ───────────────────────────────────────────────────────
-
-async function runAbsorption() {
-    if (!currentResults) {
-        showAbsorptionMsg('Run a simulation first before computing absorption.', 'error');
-        return;
-    }
-
-    document.getElementById('absorptionError').classList.add('hidden');
-    document.getElementById('absorptionSuccess').classList.add('hidden');
-    setSpinnerActive('absorptionSpinner', true);
-
-    // 1. Robust token parsing for Populations (<state> <density>)
-    const populations = {};
-    const popTokens = document.getElementById('absorptionPopulations').value.trim().split(/\s+/);
-    for (let i = 0; i + 1 < popTokens.length; i += 2) {
-        const state = parseInt(popTokens[i], 10);
-        const density = parseFloat(popTokens[i + 1]);
-        if (!isNaN(state) && !isNaN(density)) {
-            populations[state] = density;
-        }
-    }
-
-    // 2. Robust token parsing for Linewidths (<i> <j> <meV>)
-    const linewidths = {};
-    const lwTokens = document.getElementById('absorptionLinewidths').value.trim().split(/\s+/);
-    for (let i = 0; i + 2 < lwTokens.length; i += 3) {
-        const stateI = parseInt(lwTokens[i], 10);
-        const stateJ = parseInt(lwTokens[i + 1], 10);
-        const gamma = parseFloat(lwTokens[i + 2]);
-        if (!isNaN(stateI) && !isNaN(stateJ) && !isNaN(gamma)) {
-            linewidths[`${stateI},${stateJ}`] = gamma;
-        }
-    }
-
-    // Validate inputs
-    if (Object.keys(populations).length === 0) {
-        showAbsorptionMsg('No valid populations found. Check format: e.g. "1 5e14" (state density).', 'error');
-        setSpinnerActive('absorptionSpinner', false);
-        return;
-    }
-    if (Object.keys(linewidths).length === 0) {
-        showAbsorptionMsg('No valid linewidths found. Check format: e.g. "1 2 10" (i j meV).', 'error');
-        setSpinnerActive('absorptionSpinner', false);
-        return;
-    }
-
-    const eMin = document.getElementById('absEnergyMin').value;
-    const eMax = document.getElementById('absEnergyMax').value;
-
-    const payload = {
-        material: document.getElementById('material').value,
-        solver: document.getElementById('solver').value,
-        subband_model: document.getElementById('subband_model').value,
-        layer_structure: getLayerStructureString(),
-        electric_field: document.getElementById('electric_field').value,
-        grid_spacing: document.getElementById('grid_spacing').value,
-        num_states: document.getElementById('num_states').value,
-        populations,
-        linewidths,
-        energy_range_meV: (eMin && eMax) ? [parseFloat(eMin), parseFloat(eMax)] : null,
-        n_points: 2000,
-    };
-
-    try {
-        const response = await fetch('/api/absorption', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Server error ${response.status}: ${text.slice(0, 200)}`);
-        }
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            renderAbsorptionChart(data.spectrum);
-            renderTransitionTable(data.transitions);
-            showAbsorptionMsg('Absorption spectrum computed successfully.', 'success');
-        } else {
-            showAbsorptionMsg(data.message, 'error');
-        }
-    } catch (err) {
-        showAbsorptionMsg(`Request failed: ${err.message}`, 'error');
-        console.error('Absorption error:', err);
-    } finally {
-        setSpinnerActive('absorptionSpinner', false);
-    }
-}
-
-function renderAbsorptionChart(spectrum) {
-    const ctx = document.getElementById('absorptionChart').getContext('2d');
-    if (absorptionChart) absorptionChart.destroy();
-
-    absorptionChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            datasets: [
-                {
-                    label: 'α(ħω) [cm⁻¹]',
-                    data: spectrum.hbar_omega_meV.map((e, i) => ({ x: e, y: spectrum.alpha_cm[i] })),
-                    borderColor: 'rgb(118,75,162)', backgroundColor: 'rgba(118,75,162,0.07)',
-                    borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true,
-                },
-                {
-                    label: 'α = 0',
-                    data: spectrum.hbar_omega_meV.map(e => ({ x: e, y: 0 })),
-                    borderColor: 'rgba(0,0,0,0.18)', borderDash: [5, 4], borderWidth: 1, pointRadius: 0, fill: false,
-                },
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { display: true },
-                maintainAspectRatio: false, 
-                zoom: getZoomOptions('xy'),
-                title: { display: true, text: 'Intersubband Absorption Coefficient' },
-                tooltip: { callbacks: { label: c => `α = ${c.parsed.y.toFixed(2)} cm⁻¹  @  ${c.parsed.x.toFixed(2)} meV` } }
-            },
-            scales: {
-                x: { type: 'linear', title: { display: true, text: 'ħω (meV)' } },
-                y: { title: { display: true, text: 'α (cm⁻¹)' } },
-            },
-        },
-    });
-}
 
 function renderTransitionTable(transitions) {
     const tbody = document.getElementById('transitionTableBody');
@@ -615,189 +684,7 @@ function renderTransitionTable(transitions) {
     document.getElementById('transitionTableSection').classList.remove('hidden');
 }
 
-// ── Diffusion ─────────────────────────────────────────────────────────────────
 
-async function runDiffusion() {
-    if (!currentResults) {
-        showDiffusionMessage('Run a simulation first to initialise the solver grid.', 'error');
-        return;
-    }
-    clearDiffusionMessages();
-    setSpinnerActive('diffusionSpinner', true);
-
-    // Parse transport: "state D tau" per line
-    const transport_properties = {};
-    const transportTokens = document.getElementById('diffTransport').value.trim().split(/\s+/);
-    for (let i = 0; i + 2 < transportTokens.length; i += 3) {
-        const sb = transportTokens[i];
-        const D = parseFloat(transportTokens[i + 1]);
-        const tau = parseFloat(transportTokens[i + 2]);
-        if (sb && !isNaN(D) && !isNaN(tau)) {
-            transport_properties[sb] = [D, tau];
-        }
-    }
-
-    // Parse generation: chunk tokens into pairs [state, G]
-    const generation = {};
-    const genTokens = document.getElementById('diffGeneration').value.trim().split(/\s+/);
-    for (let i = 0; i + 1 < genTokens.length; i += 2) {
-        const sb = genTokens[i];
-        const G = parseFloat(genTokens[i + 1]);
-        if (sb && !isNaN(G)) {
-            generation[sb] = G;
-        }
-    }
-
-    const payload = {
-        material: document.getElementById('material').value,
-        solver: document.getElementById('solver').value,
-        subband_model: document.getElementById('subband_model').value,
-        layer_structure: getLayerStructureString(),
-        electric_field: document.getElementById('electric_field').value,
-        grid_spacing: document.getElementById('grid_spacing').value,
-        num_states: document.getElementById('num_states').value,
-        transport_properties, // key the backend now expects
-        generation,
-    };
-
-    try {
-        const response = await fetch('/api/diffusion', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`HTTP error ${response.status}: ${text.slice(0, 200)}`);
-        }
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            displayDiffusionChart(data.z_grid, data.spatial_populations);
-            renderDiffusionSheetTable(data.sheet_densities, data.peak_densities);
-            showDiffusionMessage('Steady-state diffusion solved successfully.', 'success');
-        } else {
-            showDiffusionMessage(data.message, 'error');
-        }
-    } catch (err) {
-        showDiffusionMessage(`Error: ${err.message}`, 'error');
-        console.error('Diffusion error:', err);
-    } finally {
-        setSpinnerActive('diffusionSpinner', false);
-    }
-}
-
-function displayDiffusionChart(zGrid, spatialPops) {
-    const ctx = document.getElementById('diffusionChart').getContext('2d');
-    if (diffusionChart) diffusionChart.destroy();
-
-    const colors = ['rgb(255,99,132)', 'rgb(54,162,235)', 'rgb(75,192,192)', 'rgb(153,102,255)'];
-    const datasets = Object.keys(spatialPops).map((sb, idx) => ({
-        label: `Subband ${sb}`,
-        data: zGrid.map((z, i) => ({ x: z, y: spatialPops[sb][i] })),
-        borderColor: colors[idx % colors.length],
-        borderWidth: 2, pointRadius: 0, tension: 0.3, fill: false,
-    }));
-
-    diffusionChart = new Chart(ctx, {
-        type: 'line', data: { datasets },
-        options: {
-            responsive: true,
-            plugins: { title: { display: true, text: 'Steady-State Carrier Density Profiles' },
-            maintainAspectRatio: false, 
-            zoom: getZoomOptions('xy') },
-            scales: {
-                x: { type: 'linear', title: { display: true, text: 'z (Å)' } },
-                y: { title: { display: true, text: 'N(z) (m⁻³)' } },
-            },
-        },
-    });
-}
-
-function renderDiffusionSheetTable(sheets, peaks) {
-    const tbody = document.getElementById('diffusionTableBody');
-    tbody.innerHTML = '';
-    Object.keys(sheets).forEach(sb => {
-        const row = document.createElement('tr');
-        row.innerHTML = `<td>${sb}</td>
-            <td>${(+sheets[sb]).toExponential(4)}</td>
-            <td>${peaks && peaks[sb] !== undefined ? (+peaks[sb]).toExponential(4) : '—'}</td>`;
-        tbody.appendChild(row);
-    });
-    document.getElementById('diffusionTableSection').classList.remove('hidden');
-}
-
-// ── Segregation ───────────────────────────────────────────────────────────────
-
-async function runSegregation() {
-    clearSegregationMessages();
-    setSpinnerActive('segregationSpinner', true);
-
-    const payload = {
-        layer_structure: getLayerStructureString(),
-        grid_spacing: document.getElementById('grid_spacing').value,
-        model_type: document.getElementById('segModelType').value,
-        param_value: parseFloat(document.getElementById('segParamValue').value),
-        asymmetric: document.getElementById('segAsymmetric').value === 'true',
-    };
-
-    try {
-        const response = await fetch('/api/segregation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            displaySegregationChart(data.z, data.x_nominal, data.x_smeared);
-            showSegregationMessage('Segregation profile calculated.', 'success');
-        } else {
-            showSegregationMessage(data.message, 'error');
-        }
-    } catch (err) {
-        showSegregationMessage(`Error: ${err.message}`, 'error');
-    } finally {
-        setSpinnerActive('segregationSpinner', false);
-    }
-}
-
-function displaySegregationChart(z, xNominal, xSmeared) {
-    const ctx = document.getElementById('segregationChart').getContext('2d');
-    if (segregationChart) segregationChart.destroy();
-
-    segregationChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            datasets: [
-                {
-                    label: 'Nominal (sharp)',
-                    data: z.map((v, i) => ({ x: v, y: xNominal[i] })),
-                    borderColor: 'rgb(120,120,120)', borderDash: [5, 5],
-                    borderWidth: 2, pointRadius: 0, tension: 0, fill: false,
-                },
-                {
-                    label: 'Smeared',
-                    data: z.map((v, i) => ({ x: v, y: xSmeared[i] })),
-                    borderColor: 'rgb(118,75,162)',
-                    borderWidth: 3, pointRadius: 0, tension: 0.1, fill: false,
-                },
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: { title: { display: true, text: 'Interface Segregation / Smearing' },
-            maintainAspectRatio: false, 
-            zoom: getZoomOptions('xy') 
-        },
-            scales: {
-                x: { type: 'linear', title: { display: true, text: 'z (Å)' } },
-                y: { title: { display: true, text: 'Alloy fraction x' }, min: 0, max: 1 },
-            },
-        },
-    });
-}
 
 // ── Transition Calculator ────────────────────────────────────────────────────
 
@@ -809,192 +696,14 @@ function getTransitionStructurePayload() {
         layer_structure: getLayerStructureString(),
         grid_spacing: document.getElementById('grid_spacing').value,
         num_states: document.getElementById('num_states').value,
+        padding: document.getElementById('padding').value,
     };
 }
+
 
 async function runTransition() {
-    clearTransitionMessages();
-
-    const state_i = parseInt(document.getElementById('state_i').value, 10);
-    const state_j = parseInt(document.getElementById('state_j').value, 10);
-    if (!state_i || !state_j || state_i === state_j) {
-        showTransitionMessage('Choose two different state indices for i and j.', 'error');
-        return;
-    }
-
-    setSpinnerActive('transitionSpinner', true);
-    document.getElementById('transitionLoadingLabel').classList.remove('hidden');
-    document.getElementById('runTransitionBtn').disabled = true;
-
-    const payload = {
-        ...getTransitionStructurePayload(),
-        electric_field: document.getElementById('electric_field').value,
-        state_i, state_j,
-    };
-
-    try {
-        const response = await fetch('/api/transition', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Server error ${response.status}: ${text.slice(0, 200)}`);
-        }
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            displayTransitionResult(data.transition);
-            showTransitionMessage('Transition computed successfully.', 'success');
-        } else {
-            showTransitionMessage(data.message, 'error');
-        }
-    } catch (err) {
-        showTransitionMessage(`Error: ${err.message}`, 'error');
-        console.error('Transition error:', err);
-    } finally {
-        setSpinnerActive('transitionSpinner', false);
-        document.getElementById('transitionLoadingLabel').classList.add('hidden');
-        document.getElementById('runTransitionBtn').disabled = false;
-    }
-}
-
-function displayTransitionResult(t) {
-    document.getElementById('tr-pair').textContent = `${t.state_i} → ${t.state_j}`;
-    document.getElementById('tr-eij').textContent = `${t.E_ij_meV.toFixed(3)} meV`;
-    document.getElementById('tr-dij').textContent = `${t.d_ij_A.toFixed(3)} Å`;
-    document.getElementById('tr-fij').textContent = t.f_ij.toFixed(5);
-    document.getElementById('tr-field').textContent = `${t.electric_field} kV/cm`;
-    document.getElementById('transitionResultCard').classList.remove('hidden');
-}
-
-async function runTransitionSweep() {
-    clearTransitionMessages();
-
-    const state_i = parseInt(document.getElementById('state_i').value, 10);
-    const state_j = parseInt(document.getElementById('state_j').value, 10);
-    if (!state_i || !state_j || state_i === state_j) {
-        showTransitionMessage('Choose two different state indices for i and j.', 'error');
-        return;
-    }
-
-    const k_start = parseFloat(document.getElementById('k_start').value);
-    const k_end = parseFloat(document.getElementById('k_end').value);
-    const k_step = parseFloat(document.getElementById('k_step').value);
-    if (isNaN(k_start) || isNaN(k_end) || isNaN(k_step) || k_step <= 0 || k_end < k_start) {
-        showTransitionMessage('Check the K sweep range: K end must be ≥ K start, and K step must be > 0.', 'error');
-        return;
-    }
-
-    setSpinnerActive('transitionSweepSpinner', true);
-    document.getElementById('transitionSweepLoadingLabel').classList.remove('hidden');
-    document.getElementById('runTransitionSweepBtn').disabled = true;
-
-    const payload = {
-        ...getTransitionStructurePayload(),
-        state_i, state_j, k_start, k_end, k_step,
-    };
-
-    try {
-        const response = await fetch('/api/transition-sweep', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Server error ${response.status}: ${text.slice(0, 200)}`);
-        }
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            displayTransitionSweepCharts(data.sweep, data.state_i, data.state_j);
-            showTransitionMessage(`K sweep completed — ${data.sweep.k_kVcm.length} points.`, 'success');
-        } else {
-            showTransitionMessage(data.message, 'error');
-        }
-    } catch (err) {
-        showTransitionMessage(`Error: ${err.message}`, 'error');
-        console.error('Transition sweep error:', err);
-    } finally {
-        setSpinnerActive('transitionSweepSpinner', false);
-        document.getElementById('transitionSweepLoadingLabel').classList.add('hidden');
-        document.getElementById('runTransitionSweepBtn').disabled = false;
-    }
-}
-
-function displayTransitionSweepCharts(sweep, i, j) {
-    const label = `${i} → ${j}`;
-
-    const eCtx = document.getElementById('transitionEChart').getContext('2d');
-    if (transitionEChart) transitionEChart.destroy();
-    transitionEChart = new Chart(eCtx, {
-        type: 'line',
-        data: {
-            datasets: [{
-                label: `E_${label} (meV)`,
-                data: sweep.k_kVcm.map((k, idx) => ({ x: k, y: sweep.E_ij_meV[idx] })),
-                borderColor: 'rgb(102,126,234)', borderWidth: 2, pointRadius: 3, tension: 0.25, fill: false,
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true }, title: { display: true, text: 'Transition Energy vs. Electric Field' }, 
-            maintainAspectRatio: false, 
-            zoom: getZoomOptions('xy')},
-            scales: {
-                x: { type: 'linear', title: { display: true, text: 'K (kV/cm)' } },
-                y: { title: { display: true, text: 'E_ij (meV)' } },
-            },
-        },
-    });
-
-    const dCtx = document.getElementById('transitionDChart').getContext('2d');
-    if (transitionDChart) transitionDChart.destroy();
-    transitionDChart = new Chart(dCtx, {
-        type: 'line',
-        data: {
-            datasets: [{
-                label: `|d_${label}| (Å)`,
-                data: sweep.k_kVcm.map((k, idx) => ({ x: k, y: sweep.d_ij_A[idx] })),
-                borderColor: 'rgb(118,75,162)', borderWidth: 2, pointRadius: 3, tension: 0.25, fill: false,
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true }, title: { display: true, text: 'Dipole Moment vs. Electric Field' } },
-            scales: {
-                x: { type: 'linear', title: { display: true, text: 'K (kV/cm)' } },
-                y: { title: { display: true, text: '|d_ij| (Å)' } },
-            },
-        },
-    });
-
-    const fCtx = document.getElementById('transitionFChart').getContext('2d');
-    if (transitionFChart) transitionFChart.destroy();
-    transitionFChart = new Chart(fCtx, {
-        type: 'line',
-        data: {
-            datasets: [{
-                label: `f_${label}`,
-                data: sweep.k_kVcm.map((k, idx) => ({ x: k, y: sweep.f_ij[idx] })),
-                borderColor: 'rgb(56,178,172)', borderWidth: 2, pointRadius: 3, tension: 0.25, fill: false,
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true }, title: { display: true, text: 'Oscillator Strength vs. Electric Field' },
-            maintainAspectRatio: false, 
-            zoom: getZoomOptions('xy') },
-            scales: {
-                x: { type: 'linear', title: { display: true, text: 'K (kV/cm)' } },
-                y: { title: { display: true, text: 'f_ij' } },
-            },
-        },
-    });
-
-    document.getElementById('transitionSweepCharts').classList.remove('hidden');
+    const btn = document.getElementById('runTransitionBtn');
+    if (!btn || btn.disabled) return;
 }
 
 function showTransitionMessage(msg, type) {
@@ -1093,11 +802,14 @@ function clearMessages() {
     document.getElementById('successMessage').classList.add('hidden');
 }
 
-document.getElementById('resetZoomBtn').addEventListener('click', () => {
-    if (potentialChart) {
-        potentialChart.resetZoom();
-    }
-});
+const resetZoomBtn = document.getElementById('resetZoomBtn');
+if (resetZoomBtn) {
+    resetZoomBtn.addEventListener('click', () => {
+        if (potentialChart) {
+            potentialChart.resetZoom();
+        }
+    });
+}
 
 function toggleFullScreen(elementId) {
     const card = document.getElementById(elementId);
@@ -1109,9 +821,9 @@ function toggleFullScreen(elementId) {
     if (!document.fullscreenElement) {
         if (card.requestFullscreen) {
             card.requestFullscreen();
-        } else if (card.webkitRequestFullscreen) { /* Safari */
+        } else if (card.webkitRequestFullscreen) { 
             card.webkitRequestFullscreen();
-        } else if (card.msRequestFullscreen) { /* IE11 */
+        } else if (card.msRequestFullscreen) { 
             card.msRequestFullscreen();
         }
     } else {
@@ -1121,10 +833,7 @@ function toggleFullScreen(elementId) {
     }
 }
 
-/**
- * 2. Modular Zoom Reset
- * Finds the canvas within the button's parent card and resets its Chart.js zoom plugin state.
- */
+/**  2. Modular Zoom Reset Finds the canvas within the button's parent card and resets its Chart.js zoom plugin state.*/
 function resetChartZoom(buttonElement) {
     const card = buttonElement.closest('.chart-card');
     if (!card) return;
@@ -1132,17 +841,14 @@ function resetChartZoom(buttonElement) {
     const canvas = card.querySelector('canvas');
     if (!canvas) return;
 
-    // Retrieve the active Chart instance attached to this canvas
+    
     const chartInstance = Chart.getChart(canvas);
     if (chartInstance && typeof chartInstance.resetZoom === 'function') {
         chartInstance.resetZoom();
     }
 }
 
-/**
- * 3. Modular Reusable Zoom Options Config
- * Pass this into your Chart.js options.plugins.zoom block for instant zoom support.
- */
+/** 3. Modular Reusable Zoom Options Config Pass this into your Chart.js options.plugins.zoom block for instant zoom support. */
 function getZoomOptions(mode = 'xy') {
     return {
         pan: {
@@ -1162,24 +868,21 @@ function getZoomOptions(mode = 'xy') {
     };
 }
 
-/**
- * 4. Fullscreen State Sync & Automatic Chart Resizing
- * Triggers Chart.js resize on ALL instances whenever native fullscreen toggles (e.g., ESC key press).
- */
+/** 4. Fullscreen State Sync & Automatic Chart Resizing Triggers Chart.js resize on ALL instances whenever native fullscreen toggles . */
 document.addEventListener('fullscreenchange', () => {
     const activeFullscreen = document.fullscreenElement;
 
-    // Remove active class from all cards
+    
     document.querySelectorAll('.chart-card').forEach(card => {
         card.classList.remove('is-fullscreen');
     });
 
-    // Add active class to current fullscreen element if it's a card
+    
     if (activeFullscreen && activeFullscreen.classList.contains('chart-card')) {
         activeFullscreen.classList.add('is-fullscreen');
     }
 
-    // Force all Chart.js instances on the page to recalculate container dimensions
+    
     setTimeout(() => {
         Object.values(Chart.instances).forEach(chart => {
             chart.resize();

@@ -65,29 +65,40 @@ body {
 .sidebar-header h1 { font-size:1.2em; font-weight:700; letter-spacing:.01em; }
 .sidebar-header p  { font-size:.78em; opacity:.85; margin-top:3px; }
 
-/* ── Tab strip ────────────────────────────────────────────── */
-.tab-strip {
+/* ── Page switch (QW Simulator / Transition Calculator) ──────
+   Pill toggle sitting on the gradient header — same visual language
+   as the other toggle groups (.param-toggle-btn / .sweep-toggle),
+   just inverted for a colored background: translucent white pills
+   that go solid white with indigo text when active. */
+.page-switch {
     display: flex;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
+    gap: 8px;
+    flex-wrap: wrap;
 }
-.tab-btn {
+.page-switch-btn {
     flex: 1;
-    padding: 10px 0;
-    background: none;
-    border: none;
-    border-bottom: 2px solid transparent;
-    font-size: .8em;
-    font-weight: 600;
-    color: var(--muted);
+    min-width: 0;
+    padding: 9px 10px;
+    border: 1.5px solid rgba(255,255,255,0.4);
+    border-radius: 999px;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    font-size: .82em;
+    font-weight: 700;
+    letter-spacing: .01em;
     cursor: pointer;
-    transition: color .15s, border-color .15s;
+    transition: background .15s, border-color .15s, color .15s, box-shadow .15s;
 }
-.tab-btn:hover  { color: var(--indigo); }
-.tab-btn.active { color: var(--indigo); border-bottom-color: var(--indigo); }
-
-.tab-panel { display: none; flex: 1; }
-.tab-panel.active { display: block; }
+.page-switch-btn:hover {
+    background: rgba(255,255,255,0.22);
+    border-color: rgba(255,255,255,0.6);
+}
+.page-switch-btn.active {
+    background: #fff;
+    border-color: #fff;
+    color: var(--indigo);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+}
 
 /* ── Sidebar form ─────────────────────────────────────────── */
 .sidebar-form { padding: 16px 16px 12px; display:flex; flex-direction:column; }
@@ -359,6 +370,13 @@ tbody tr:hover { background: var(--indigo-lt); }
 #energyTable  { font-size:.9em; }
 
 /* ── Sweep-K toggle (pill with custom checkmark box) ─────── */
+/* Higher-specificity override: `.form-group label` (defined above) was
+   beating the plain `.sweep-toggle` class and forcing display:block,
+   which collapsed the checkbox box to zero width and made the checkmark
+   render on top of the "Sweep K?" text instead of beside it. */
+.form-group .sweep-toggle {
+    display: flex;
+}
 .sweep-toggle {
     display: flex;
     align-items: center;
@@ -423,6 +441,30 @@ tbody tr:hover { background: var(--indigo-lt); }
     background: var(--indigo-lt);
 }
 .sweep-toggle.active .sweep-toggle-text { color: var(--indigo); }
+
+/* ── Structure sweep parameter toggle group ──────────────── */
+.param-toggle-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.param-toggle-btn {
+    padding: 7px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
+    background: var(--white);
+    color: var(--text);
+    font-size: .82em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color .15s, background .15s, color .15s;
+}
+.param-toggle-btn:hover { border-color: var(--indigo); }
+.param-toggle-btn.active {
+    border-color: var(--indigo);
+    background: linear-gradient(135deg, var(--indigo), var(--purple));
+    color: #fff;
+}
 
 /* ── Toggle label ─────────────────────────────────────────── */
 .toggle-label {
