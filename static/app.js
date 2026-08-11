@@ -9,7 +9,7 @@ let structSweepEChart = null;
 let structSweepDChart = null;
 let structSweepFChart = null;
 let currentResults = null;
-let currentSweepParam = 'none'; // 'none' | 'width' | 'molar' — a structure sweep param is REQUIRED to run
+let currentSweepParam = 'none'; // 'none' | 'width' | 'molar' 
 
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('simulatorForm').addEventListener('submit', handleSubmit);
