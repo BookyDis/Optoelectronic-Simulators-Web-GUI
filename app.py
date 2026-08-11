@@ -1,7 +1,8 @@
-import os, tempfile, traceback
+import os, tempfile, traceback,signal
 import numpy as np
-from flask import Flask, request, jsonify, send_from_directory
+import time
 
+from flask import Flask, request, jsonify, send_from_directory
 from src import ConstAndScales
 from src.Material            import Material
 from src.Composition         import Composition
@@ -9,9 +10,10 @@ from src.Grid                import Grid
 from src.Solvers_FDM         import Parabolic_FDM, Kane_FDM, Taylor_FDM
 from src.Solvers_TMM         import Parabolic_TMM, Taylor_TMM, Kane_TMM, Ekenberg_TMM
 from src.TransitionCalculator import TransitionCalculator
+from threading import Thread
 
 app = Flask(__name__, static_folder='static', static_url_path='')
-
+last_heartbeat = time.time()
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def select_solver(solver_method, subband_model, grid, num_states):
@@ -399,6 +401,22 @@ def material_info():
             "kane_parameter": {"well":m.P.well, "barrier":m.P.barr}})
     except Exception as e:
         return jsonify({"status":"error","message":str(e)}), 500
+
+app.route('/heartbeat')
+def heartbeat():
+    global last_heartbeat
+    last_heartbeat = time.time()
+    return "", 200
+
+def monitor_browser():
+    while True:
+        time.sleep(2)
+        # If no heartbeat received within 5 seconds, close server
+        if time.time() - last_heartbeat > 5:
+            os.kill(os.getpid(), signal.SIGINT)
+
+# Start background monitoring thread
+Thread(target=monitor_browser, daemon=True).start()
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

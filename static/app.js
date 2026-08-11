@@ -889,3 +889,8 @@ document.addEventListener('fullscreenchange', () => {
         });
     }, 100);
 });
+
+/** checking tab closing function */
+setInterval(() => {
+    fetch('/heartbeat');
+  }, 2000);
